@@ -2750,6 +2750,12 @@ function selectNotionBooth(id){
     ${b.notes ? '<span style="color:var(--red,#c97070);">⚠️ '+b.notes+'</span>' : ''}
   `;
   document.getElementById('si-notion-selected').style.display = 'block';
+  // Reset photo upload status for this selected booth
+  notionBoothPhotoUrl = null;
+  safeSetDisplay('si-photo-preview', 'none');
+  safeSetText('si-photo-label', '選取此地點後，可直接上傳現場照片');
+  const siPhotoLabel = safeEl('si-photo-label');
+  if(siPhotoLabel) siPhotoLabel.style.color = 'var(--accent)';
   // Scroll to selected
   document.getElementById('si-notion-selected').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
@@ -2757,6 +2763,42 @@ function selectNotionBooth(id){
 function cancelNotionSelection(){
   selectedNotionBooth = null;
   document.getElementById('si-notion-selected').style.display = 'none';
+}
+
+let notionBoothPhotoUrl = null;
+
+function loadNotionBoothPhoto(input){
+  if(!input || !input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if(!file.type || !file.type.startsWith('image/')){
+    alert('請選擇圖片檔案');
+    input.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    notionBoothPhotoUrl = e.target.result;
+    spacePhotoDataUrl = notionBoothPhotoUrl;
+
+    // 顯示 Notion 選取區塊裡的照片預覽
+    safeSetDisplay('si-photo-preview', 'block');
+    const preview = safeEl('si-photo-preview-img');
+    if(preview) preview.src = notionBoothPhotoUrl;
+    safeSetText('si-photo-label', '✓ 現場照片已上傳，按「套用此攤位」即可顯示');
+    const label = safeEl('si-photo-label');
+    if(label) label.style.color = 'var(--green,#7eb87a)';
+
+    // 也同步到上傳照片頁籤的預覽，方便使用者切換查看
+    const photoPreview = safeEl('space-preview-img');
+    if(photoPreview) photoPreview.src = notionBoothPhotoUrl;
+    safeSetDisplay('space-preview-wrap', 'flex');
+
+    // 先用本機估算，不呼叫外部 AI，避免 GitHub Pages CORS 問題
+    try{ analyzeSpaceWithAI(notionBoothPhotoUrl); }catch(err){ console.warn(err); }
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
 }
 
 function applyNotionBooth(){
