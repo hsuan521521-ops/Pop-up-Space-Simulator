@@ -2916,6 +2916,27 @@ function loadSpacePhoto(input){
   reader.readAsDataURL(input.files[0]);
 }
 
+
+function safeEl(id){
+  return document.getElementById(id);
+}
+function safeSetDisplay(id, display){
+  const el = safeEl(id);
+  if(el) el.style.display = display;
+}
+function safeSetText(id, text){
+  const el = safeEl(id);
+  if(el) el.textContent = text;
+}
+function safeSetValue(id, value){
+  const el = safeEl(id);
+  if(el) el.value = value;
+}
+function safeSetHTML(id, html){
+  const el = safeEl(id);
+  if(el) el.innerHTML = html;
+}
+
 async function analyzeSpaceWithAI(dataUrl){
   // GitHub Pages 是純前端靜態網站，不能直接呼叫 Anthropic / Claude API。
   // 原本直接 fetch('https://api.anthropic.com/v1/messages') 會被瀏覽器 CORS 擋掉，
@@ -2969,40 +2990,40 @@ async function analyzeSpaceWithAI(dataUrl){
         ]
       };
 
-      document.getElementById('space-w').value = estimatedW;
-      document.getElementById('space-d').value = estimatedD;
-      document.getElementById('space-h').value = estimatedH;
-      document.getElementById('space-ai-desc').textContent =
-        "照片已匯入。GitHub Pages 無法直接執行雲端 AI 分析，已先用本機模式估算尺寸，可手動修改後套用。";
+      safeSetValue('space-w', estimatedW);
+      safeSetValue('space-d', estimatedD);
+      safeSetValue('space-h', estimatedH);
+      safeSetText('space-ai-desc',
+        "照片已匯入。GitHub Pages 無法直接執行雲端 AI 分析，已先用本機模式估算尺寸，可手動修改後套用。");
 
-      document.getElementById('space-features-wrap').style.display = 'block';
-      document.getElementById('space-features').innerHTML =
-        spaceAIData.features.map(f => `✓ ${f}`).join('<br>');
+      safeSetDisplay('space-features-wrap', 'block');
+      safeSetHTML('space-features',
+        spaceAIData.features.map(f => `✓ ${f}`).join('<br>'));
 
-      document.getElementById('space-ai-status').style.display = 'none';
-      document.getElementById('space-dims-form').style.display = 'flex';
+      safeSetDisplay('space-ai-status', 'none');
+      safeSetDisplay('space-dims-form', 'flex');
     };
 
     img.onerror = () => {
-      document.getElementById('space-ai-msg').textContent = '照片讀取失敗，請換一張圖片';
-      const sp = document.getElementById('space-ai-status')?.querySelector('.spinner');
+      safeSetText('space-ai-msg', '照片讀取失敗，請換一張圖片');
+      const sp = safeEl('space-ai-status')?.querySelector('.spinner');
       if(sp) sp.style.display = 'none';
-      document.getElementById('space-w').value = 300;
-      document.getElementById('space-d').value = 300;
-      document.getElementById('space-h').value = 280;
-      document.getElementById('space-dims-form').style.display = 'flex';
+      safeSetValue('space-w', 300);
+      safeSetValue('space-d', 300);
+      safeSetValue('space-h', 280);
+      safeSetDisplay('space-dims-form', 'flex');
     };
 
     img.src = dataUrl;
   } catch(err) {
     console.warn('Local space analysis fallback failed:', err);
-    document.getElementById('space-ai-msg').textContent = '已切換手動模式，請輸入尺寸';
-    const sp = document.getElementById('space-ai-status')?.querySelector('.spinner');
+    safeSetText('space-ai-msg', '已切換手動模式，請輸入尺寸');
+    const sp = safeEl('space-ai-status')?.querySelector('.spinner');
     if(sp) sp.style.display = 'none';
-    document.getElementById('space-w').value = 300;
-    document.getElementById('space-d').value = 300;
-    document.getElementById('space-h').value = 280;
-    document.getElementById('space-dims-form').style.display = 'flex';
+    safeSetValue('space-w', 300);
+    safeSetValue('space-d', 300);
+    safeSetValue('space-h', 280);
+    safeSetDisplay('space-dims-form', 'flex');
   }
 }
 
