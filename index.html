@@ -174,6 +174,7 @@
   <button class="tb-btn" id="btn-bg-mode" onclick="toggleBgMode()" style="display:none;">🔄 2D底圖</button>
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="exportImage()">📷 截圖</button>
+  <button class="tb-btn" id="btn-dim-toggle" onclick="toggleDimensionDisplay()">📏 顯示尺寸</button>
   <button class="tb-btn" onclick="showComposite()">🏙 場景合成</button>
   <button class="tb-btn" onclick="showCompositePro()" style="border-color:#7aabb8;color:#7aabb8;">📐 合成 Pro</button>
   <button class="tb-btn" style="border-color:var(--accent);color:var(--accent);" onclick="showAIPanel()">✦ AI 掃描物品</button>
@@ -323,6 +324,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯包覆背板：正面＝主背板，左側＝側面包覆板</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -865,6 +867,9 @@ const ITEMS = [
 
   // 背板
   {id:'bw_full',    cat:'backwall', name:'全版背板',       icon:'🖼', w:300, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
+  {id:'bw_escalator_wrap', cat:'backwall', name:'手扶梯下方包覆背板 雙面', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_backwall', color:'#f0ece6',
+   spec:{size:'主面150×220cm＋側面60×220cm', note:'適合包覆手扶梯下方斜面/轉角位置，可上傳兩面輸出圖'}},
+
   {id:'bw_half',    cat:'backwall', name:'半版背板',        icon:'🖼', w:150, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
   {id:'bw_wide',    cat:'backwall', name:'橫版背板',        icon:'🖼', w:300, d:5,  h:150, cost:0, shape:'backwall',   color:'#f0ece6'},
   {id:'bw_x60',     cat:'backwall', name:'X展架 60×160',    icon:'🪧', w:60,  d:10, h:160, cost:0, shape:'backwall',   color:'#f0ece6'},
@@ -1728,6 +1733,93 @@ function buildMesh(item, color){
       group.add(popL); group.userData.popFront=popL;
       break;
     }
+    case 'escalator_wrap_backwall':{
+      // 手扶梯下方包覆背板：兩片相連的 L 型包覆背板
+      // w = 主面寬，d = 側面深，h = 高度
+      const boardMat = new THREE.MeshLambertMaterial({color:new THREE.Color(color)});
+      const edgeMat  = new THREE.MeshLambertMaterial({color:0x222222});
+      const t = Math.max(5*U, item.d ? 5*U : 5*U);
+
+      // 主正面背板
+      const main = new THREE.Mesh(new THREE.BoxGeometry(w, h, t), boardMat);
+      main.position.set(0, h/2, 0);
+      main.castShadow = true;
+      main.receiveShadow = true;
+      group.add(main);
+
+      // 右側包覆側板，呈 90 度轉角
+      const side = new THREE.Mesh(new THREE.BoxGeometry(d, h, t), boardMat);
+      side.rotation.y = Math.PI/2;
+      side.position.set(w/2, h/2, -d/2);
+      side.castShadow = true;
+      side.receiveShadow = true;
+      group.add(side);
+
+      // 上方斜切視覺板：模擬手扶梯下方斜面
+      const slopeH = Math.min(h*0.34, 75*U);
+      const slope = new THREE.Mesh(new THREE.BoxGeometry(w, slopeH, t), boardMat);
+      slope.rotation.x = -Math.PI/10;
+      slope.position.set(0, h - slopeH/2, -t*0.6);
+      slope.castShadow = true;
+      slope.receiveShadow = true;
+      group.add(slope);
+
+      // 轉角黑色收邊
+      const corner = new THREE.Mesh(new THREE.BoxGeometry(3*U, h, 3*U), edgeMat);
+      corner.position.set(w/2, h/2, 0);
+      group.add(corner);
+
+      // 底座小踢腳
+      const kickMain = new THREE.Mesh(new THREE.BoxGeometry(w, 8*U, 3*U), edgeMat);
+      kickMain.position.set(0, 4*U, t/2 + 1.5*U);
+      group.add(kickMain);
+
+      const kickSide = new THREE.Mesh(new THREE.BoxGeometry(d, 8*U, 3*U), edgeMat);
+      kickSide.rotation.y = Math.PI/2;
+      kickSide.position.set(w/2 + 1.5*U, 4*U, -d/2);
+      group.add(kickSide);
+
+      // 主面 POP
+      const popFront = new THREE.Mesh(new THREE.PlaneGeometry(w*0.98, h*0.96), makeBlankPOPMaterial());
+      popFront.position.set(0, h/2, t/2 + 0.8*U);
+      popFront.userData.isPOP = true;
+      popFront.userData.popSide = 'front';
+      popFront.renderOrder = 30;
+      group.add(popFront);
+
+      // 側面 POP：使用 left 當側面，符合右側面板快速上傳
+      const popLeft = new THREE.Mesh(new THREE.PlaneGeometry(d*0.98, h*0.96), makeBlankPOPMaterial());
+      popLeft.rotation.y = Math.PI/2;
+      popLeft.position.set(w/2 + t/2 + 0.8*U, h/2, -d/2);
+      popLeft.userData.isPOP = true;
+      popLeft.userData.popSide = 'left';
+      popLeft.renderOrder = 30;
+      group.add(popLeft);
+
+      // 背面與右側也保留可貼圖面，必要時可使用
+      const popBack = new THREE.Mesh(new THREE.PlaneGeometry(w*0.98, h*0.96), makeBlankPOPMaterial());
+      popBack.rotation.y = Math.PI;
+      popBack.position.set(0, h/2, -t/2 - 0.8*U);
+      popBack.userData.isPOP = true;
+      popBack.userData.popSide = 'back';
+      popBack.renderOrder = 30;
+      group.add(popBack);
+
+      const popRight = new THREE.Mesh(new THREE.PlaneGeometry(d*0.98, h*0.96), makeBlankPOPMaterial());
+      popRight.rotation.y = -Math.PI/2;
+      popRight.position.set(w/2 - t/2 - 0.8*U, h/2, -d/2);
+      popRight.userData.isPOP = true;
+      popRight.userData.popSide = 'right';
+      popRight.renderOrder = 30;
+      group.add(popRight);
+
+      group.userData.popFront = popFront;
+      group.userData.popLeft  = popLeft;
+      group.userData.popRight = popRight;
+      group.userData.popBack  = popBack;
+      group.userData.popMesh  = popFront;
+      break;
+    }
     case 'steel_shelf':{
       const thick = 1.5*U;
       const matSteel = new THREE.MeshLambertMaterial({color:new THREE.Color('#9aa8b4')});
@@ -1850,6 +1942,7 @@ function renderItemCard(list, item, isCustom){
           <option value="tall">窄版直立</option>
           <option value="arch">拱形（圓弧頂）</option>
           <option value="lshape">L形</option>
+          <option value="escalator_wrap">手扶梯下方包覆雙面</option>
         </select>
       </div>` : '';
 
@@ -1884,7 +1977,7 @@ function renderItemCard(list, item, isCustom){
         const bwShape = shapeEl ? shapeEl.value : 'rect';
         const shapeNames = {rect:'矩形',wide:'寬版橫幅',tall:'窄版直立',arch:'拱形',lshape:'L形'};
         const prefix = isChest ? '臥式冷凍櫃' : isBW ? `背板(${shapeNames[bwShape]||''})` : '蛋糕櫃';
-        const finalShape = isBW ? (bwShape==='arch'?'backwall_arch':bwShape==='lshape'?'backwall_l':'backwall') : item.shape;
+        const finalShape = isBW ? (bwShape==='arch'?'backwall_arch':bwShape==='lshape'?'backwall_l':bwShape==='escalator_wrap'?'escalator_wrap_backwall':'backwall') : item.shape;
         const customItem = {...item,
           id:(isChest?'chest_c_':isBW?'bw_c_':'cake_dt_c_')+Date.now(),
           w, d, h,
@@ -1970,6 +2063,7 @@ function finalizePlacing(pos){
   saveHistory();
   updateSceneList();
   updateCosts();
+  updateDimensionDisplayIfNeeded();
 }
 
 
@@ -2182,6 +2276,8 @@ function selectObject(obj){
   document.getElementById('pop-panel').style.display  = hasPOP ? 'block' : 'none';
   document.getElementById('pop-single').style.display = 'none';
   document.getElementById('pop-multi').style.display  = hasPOP ? 'flex' : 'none';
+  const popHint = document.getElementById('pop-side-hint');
+  if(popHint) popHint.style.display = obj.item.shape === 'escalator_wrap_backwall' ? 'block' : 'none';
   // reset label highlights for four-face
   if(hasPOP){
     ['front','left','right','back'].forEach(side=>{
@@ -2219,6 +2315,7 @@ function updateProp(type, val){
   if(type==='z'){ selectedObj.z = val*U; selectedObj.mesh.position.z=selectedObj.z; }
   if(type==='rot'){ selectedObj.rot = val*Math.PI/180; selectedObj.mesh.rotation.y=selectedObj.rot; }
   saveHistory();
+  updateDimensionDisplayIfNeeded();
 }
 
 function applyColor(color){
@@ -2233,6 +2330,7 @@ function applyColor(color){
   selectedObj.mesh = newMesh;
   selectObject(selectedObj);
   saveHistory();
+  updateDimensionDisplayIfNeeded();
 }
 
 function deleteSelected(){
@@ -2246,6 +2344,7 @@ function deleteSelected(){
   saveHistory();
   updateSceneList();
   updateCosts();
+  updateDimensionDisplayIfNeeded();
 }
 
 function duplicateSelected(){
@@ -2263,6 +2362,7 @@ function duplicateSelected(){
   updateSceneList();
   updateCosts();
   selectObject(obj);
+  updateDimensionDisplayIfNeeded();
 }
 
 // ===================== SCENE LIST =====================
@@ -2654,6 +2754,7 @@ function applyResize(){
   selectObject(obj);
   saveHistory();
   updateSceneList();
+  updateDimensionDisplayIfNeeded();
 }
 
 function ctxRotate(deg){
@@ -2816,6 +2917,7 @@ function onMouseUp(e){
     gizmoAxis = null;
     document.getElementById('canvas-wrap').style.cursor = '';
     saveHistory();
+    updateDimensionDisplayIfNeeded();
     return;
   }
   isOrbiting=false;
@@ -2860,6 +2962,7 @@ function onKeyDown(e){
     if(e.key==='ArrowDown'){ selectedObj.z+=step; selectedObj.mesh.position.z=selectedObj.z; document.getElementById('prop-z').value=Math.round(selectedObj.z/U); }
     if(e.key==='q'){ selectedObj.rot-=Math.PI/12; selectedObj.mesh.rotation.y=selectedObj.rot; document.getElementById('prop-rot').value=Math.round(selectedObj.rot*180/Math.PI); }
     if(e.key==='e'){ selectedObj.rot+=Math.PI/12; selectedObj.mesh.rotation.y=selectedObj.rot; document.getElementById('prop-rot').value=Math.round(selectedObj.rot*180/Math.PI); }
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','q','e'].includes(e.key)) updateDimensionDisplayIfNeeded();
   }
 }
 
@@ -2970,6 +3073,7 @@ function restoreHistory(state){
   });
   updateSceneList();
   updateCosts();
+  updateDimensionDisplayIfNeeded();
 }
 
 function clearScene(){
@@ -2980,6 +3084,7 @@ function clearScene(){
   saveHistory();
   updateSceneList();
   updateCosts();
+  updateDimensionDisplayIfNeeded();
 }
 
 // ===================== SAVE/LOAD =====================
@@ -3045,6 +3150,212 @@ function onResize(){
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 3));
   renderer.setSize(wrap.clientWidth,wrap.clientHeight);
 }
+
+
+// ===================== DIMENSION ANNOTATIONS =====================
+let dimensionsVisible = false;
+let dimensionGroup = null;
+
+function makeDimensionText(text, sizePx = 54){
+  const cvs = document.createElement('canvas');
+  const ctx = cvs.getContext('2d');
+  cvs.width = 512;
+  cvs.height = 128;
+
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  ctx.font = `bold ${sizePx}px "Noto Sans TC", Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const metrics = ctx.measureText(text);
+  const boxW = Math.min(500, Math.max(160, metrics.width + 46));
+  const boxH = 78;
+  const x = (cvs.width - boxW)/2;
+  const y = (cvs.height - boxH)/2;
+
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  roundRect(ctx, x, y, boxW, boxH, 14);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(20,20,20,0.78)';
+  ctx.lineWidth = 4;
+  roundRect(ctx, x, y, boxW, boxH, 14);
+  ctx.stroke();
+
+  ctx.fillStyle = '#1a1410';
+  ctx.fillText(text, cvs.width/2, cvs.height/2 + 2);
+
+  const tex = new THREE.CanvasTexture(cvs);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.renderOrder = 10000;
+  sprite.scale.set(28, 7, 1);
+  return sprite;
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function makeDimLine(start, end, color = 0x111111){
+  const pts = [start.clone(), end.clone()];
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.95,
+    depthTest: false
+  });
+  const line = new THREE.Line(geo, mat);
+  line.renderOrder = 9998;
+  return line;
+}
+
+function makeTick(center, dir, len = 2.2, color = 0x111111){
+  const a = center.clone().add(dir.clone().multiplyScalar(-len/2));
+  const b = center.clone().add(dir.clone().multiplyScalar(len/2));
+  return makeDimLine(a, b, color);
+}
+
+function createObjectDimensionAnnotation(obj){
+  const group = new THREE.Group();
+  group.userData.isDimensionAnnotation = true;
+
+  const box = new THREE.Box3().setFromObject(obj.mesh);
+  if(!isFinite(box.min.x) || !isFinite(box.max.x)) return group;
+
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+
+  const wCm = Math.max(1, Math.round(size.x / U));
+  const hCm = Math.max(1, Math.round(size.y / U));
+  const dCm = Math.max(1, Math.round(size.z / U));
+
+  const pad = Math.max(3*U, Math.max(size.x, size.y, size.z) * 0.05);
+
+  const minX = box.min.x, maxX = box.max.x;
+  const minY = Math.max(0, box.min.y), maxY = box.max.y;
+  const minZ = box.min.z, maxZ = box.max.z;
+
+  const yBase = minY + 1.2*U;
+  const yTop = maxY + pad;
+  const zFront = maxZ + pad;
+  const xRight = maxX + pad;
+
+  // Width line: front bottom edge
+  const wA = new THREE.Vector3(minX, yBase, zFront);
+  const wB = new THREE.Vector3(maxX, yBase, zFront);
+  group.add(makeDimLine(wA, wB));
+  group.add(makeTick(wA, new THREE.Vector3(0,1,0)));
+  group.add(makeTick(wB, new THREE.Vector3(0,1,0)));
+  const wLabel = makeDimensionText(`${wCm} cm`);
+  wLabel.position.set(center.x, yBase + 2.8*U, zFront);
+  group.add(wLabel);
+
+  // Depth line: right bottom edge
+  const dA = new THREE.Vector3(xRight, yBase, minZ);
+  const dB = new THREE.Vector3(xRight, yBase, maxZ);
+  group.add(makeDimLine(dA, dB));
+  group.add(makeTick(dA, new THREE.Vector3(1,0,0)));
+  group.add(makeTick(dB, new THREE.Vector3(1,0,0)));
+  const dLabel = makeDimensionText(`${dCm} cm`);
+  dLabel.position.set(xRight, yBase + 2.8*U, center.z);
+  group.add(dLabel);
+
+  // Height line: right front vertical
+  const hA = new THREE.Vector3(xRight, minY, zFront);
+  const hB = new THREE.Vector3(xRight, maxY, zFront);
+  group.add(makeDimLine(hA, hB));
+  group.add(makeTick(hA, new THREE.Vector3(1,0,0)));
+  group.add(makeTick(hB, new THREE.Vector3(1,0,0)));
+  const hLabel = makeDimensionText(`${hCm} cm`);
+  hLabel.position.set(xRight + 2.8*U, center.y, zFront);
+  group.add(hLabel);
+
+  // Bounding frame around object for designer-style output
+  const corners = [
+    new THREE.Vector3(minX,minY,minZ), new THREE.Vector3(maxX,minY,minZ),
+    new THREE.Vector3(maxX,minY,maxZ), new THREE.Vector3(minX,minY,maxZ),
+    new THREE.Vector3(minX,maxY,minZ), new THREE.Vector3(maxX,maxY,minZ),
+    new THREE.Vector3(maxX,maxY,maxZ), new THREE.Vector3(minX,maxY,maxZ)
+  ];
+  const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  edges.forEach(([a,b])=>{
+    const line = makeDimLine(corners[a], corners[b], 0x333333);
+    line.material.opacity = 0.42;
+    group.add(line);
+  });
+
+  // Object name tag
+  const nameLabel = makeDimensionText(obj.item?.name || '物件', 42);
+  nameLabel.position.set(center.x, yTop + 5*U, center.z);
+  nameLabel.scale.set(34, 8, 1);
+  group.add(nameLabel);
+
+  return group;
+}
+
+function refreshDimensionAnnotations(){
+  if(dimensionGroup){
+    scene.remove(dimensionGroup);
+    dimensionGroup.traverse(c=>{
+      if(c.material){
+        if(c.material.map) c.material.map.dispose?.();
+        c.material.dispose?.();
+      }
+      if(c.geometry) c.geometry.dispose?.();
+    });
+    dimensionGroup = null;
+  }
+
+  if(!dimensionsVisible) return;
+
+  dimensionGroup = new THREE.Group();
+  dimensionGroup.userData.isDimensionRoot = true;
+  objects.forEach(obj=>{
+    if(!obj || !obj.mesh) return;
+    const ann = createObjectDimensionAnnotation(obj);
+    dimensionGroup.add(ann);
+  });
+  scene.add(dimensionGroup);
+}
+
+function toggleDimensionDisplay(){
+  dimensionsVisible = !dimensionsVisible;
+  const btn = document.getElementById('btn-dim-toggle');
+  if(btn){
+    btn.textContent = dimensionsVisible ? '📏 隱藏尺寸' : '📏 顯示尺寸';
+    btn.classList.toggle('active', dimensionsVisible);
+  }
+  refreshDimensionAnnotations();
+}
+
+function updateDimensionDisplayIfNeeded(){
+  if(dimensionsVisible) refreshDimensionAnnotations();
+}
+
 
 // ===================== ANIMATE =====================
 function animate(){
@@ -4009,6 +4320,7 @@ function updateImageObjectProp(type, val){
   selectedObj.mesh = newMesh;
   selectObject(selectedObj);
   saveHistory();
+  updateDimensionDisplayIfNeeded();
 }
 
 function replaceSelectedImageObject(){
