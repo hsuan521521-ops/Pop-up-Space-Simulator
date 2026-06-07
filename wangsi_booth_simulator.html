@@ -85,9 +85,9 @@
   @keyframes spin{to{transform:rotate(360deg);}}
 
   /* CANVAS */
-  #canvas-wrap{flex:1;position:relative;overflow:hidden;min-height:0;align-self:stretch;}
+  #canvas-wrap{flex:1;position:relative;overflow:hidden;min-height:0;}
   #canvas-bg-layer{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;}
-  #three-canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:auto;z-index:1;display:block;}
+  #three-canvas{display:block;width:100%;height:100%;image-rendering:auto;position:relative;z-index:1;}
 
   /* OVERLAY HINTS */
   #hint-bar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(26,20,16,.85);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:11px;color:var(--text3);pointer-events:none;white-space:nowrap;}
@@ -200,7 +200,7 @@
     <div id="canvas-bg-layer"></div>
     <canvas id="three-canvas"></canvas>
     <div id="placing-indicator">點擊場景放置｜ESC 取消</div>
-    <div id="hint-bar">左鍵旋轉｜右鍵平移｜滾輪縮放</div>
+    <div id="hint-bar">左鍵旋轉｜Shift+拖曳/中鍵拖曳平移虛擬空間｜滾輪縮放</div>
     <div id="view-btns">
       <button class="view-btn" onclick="setView('persp')" title="透視視角">3D</button>
       <button class="view-btn" onclick="setView('top')" title="俯視圖">俯</button>
@@ -377,89 +377,42 @@
 </div>
 
 <!-- SCENE COMPOSITE MODAL -->
-<div id="composite-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;display:none;flex-direction:column;">
-  <div style="display:flex;height:100%;flex-direction:row;gap:0;overflow:hidden;">
-
-    <!-- LEFT SIDEBAR: controls -->
-    <div style="width:240px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px;gap:12px;overflow-y:auto;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <h3 style="font-size:14px;font-family:'Playfair Display',serif;color:var(--accent2);">📐 場景合成</h3>
-        <button onclick="closeComposite()" style="background:transparent;border:none;color:var(--text3);font-size:18px;cursor:pointer;">✕</button>
-      </div>
-
-      <!-- Upload -->
-      <label style="display:block;background:var(--panel2);border:1.5px dashed var(--border);border-radius:8px;padding:14px;text-align:center;cursor:pointer;font-size:12px;color:var(--text2);transition:border-color .15s;" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
-        🏙 上傳現場照片
-        <input type="file" id="scene-bg-input" accept="image/*" style="display:none;" onchange="loadSceneBg(this)">
-      </label>
-
-      <div style="font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:10px;">調整位置</div>
-
-      <!-- Controls -->
-      <div style="display:flex;flex-direction:column;gap:8px;font-size:11px;color:var(--text2);">
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-            <span>縮放</span><span id="lbl-scale">80%</span>
-          </div>
-          <input type="range" id="comp-scale" min="5" max="200" value="80" style="width:100%;" oninput="document.getElementById('lbl-scale').textContent=this.value+'%';updateComposite()">
+<div id="composite-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;width:min(860px,95vw);max-height:90vh;display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="font-size:15px;font-family:'Playfair Display',serif;color:var(--accent2);">場景合成</h3>
+      <button onclick="closeComposite()" style="background:transparent;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);">上傳百貨場景圖，再調整櫃位模擬圖的位置與大小，合成後下載。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;">
+      <!-- LEFT: upload + controls -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">步驟 1 — 上傳場景圖</div>
+        <label style="display:block;background:var(--panel2);border:1.5px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;font-size:12px;color:var(--text2);">
+          🏙 點擊上傳場景背景圖
+          <input type="file" id="scene-bg-input" accept="image/*" style="display:none;" onchange="loadSceneBg(this)">
+        </label>
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">步驟 2 — 調整疊合位置</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;align-items:center;gap:6px 8px;font-size:11px;color:var(--text2);">
+          <span>X 位置</span><input type="range" id="comp-x" min="-100" max="100" value="0" oninput="updateComposite()">
+          <span>Y 位置</span><input type="range" id="comp-y" min="-100" max="100" value="0" oninput="updateComposite()">
+          <span>縮放</span><input type="range" id="comp-scale" min="20" max="150" value="80" oninput="updateComposite()">
+          <span>透明度</span><input type="range" id="comp-opacity" min="20" max="100" value="100" oninput="updateComposite()">
         </div>
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-            <span>X 位置</span><span id="lbl-x">0</span>
-          </div>
-          <input type="range" id="comp-x" min="-200" max="200" value="0" style="width:100%;" oninput="document.getElementById('lbl-x').textContent=this.value;updateComposite()">
-        </div>
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-            <span>Y 位置</span><span id="lbl-y">0</span>
-          </div>
-          <input type="range" id="comp-y" min="-200" max="200" value="0" style="width:100%;" oninput="document.getElementById('lbl-y').textContent=this.value;updateComposite()">
-        </div>
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-            <span>透明度</span><span id="lbl-opacity">100%</span>
-          </div>
-          <input type="range" id="comp-opacity" min="20" max="100" value="100" style="width:100%;" oninput="document.getElementById('lbl-opacity').textContent=this.value+'%';updateComposite()">
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button onclick="resetCompositeControls()" style="flex:1;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text2);cursor:pointer;font-family:'Noto Sans TC',sans-serif;">重設位置</button>
+          <button onclick="downloadComposite()" style="flex:2;padding:7px;background:var(--accent);border:1px solid var(--accent);border-radius:6px;font-size:12px;color:#1a1410;font-weight:500;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">⬇ 下載合成圖</button>
         </div>
       </div>
-
-      <div style="font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:10px;">自動對齊</div>
+      <!-- RIGHT: preview canvas -->
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <button onclick="autoFitComposite()" style="width:100%;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text);cursor:pointer;font-family:'Noto Sans TC',sans-serif;text-align:left;">
-          ⊡ 自動填滿照片
-        </button>
-        <button onclick="autoAlignBottom()" style="width:100%;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text);cursor:pointer;font-family:'Noto Sans TC',sans-serif;text-align:left;">
-          ⊥ 對齊地板底部
-        </button>
-        <button onclick="autoAlignCenter()" style="width:100%;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text);cursor:pointer;font-family:'Noto Sans TC',sans-serif;text-align:left;">
-          ⊙ 置中對齊
-        </button>
-        <button onclick="resetCompositeControls()" style="width:100%;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text2);cursor:pointer;font-family:'Noto Sans TC',sans-serif;text-align:left;">
-          ↺ 重設
-        </button>
-      </div>
-
-      <div style="font-size:10px;color:var(--text3);line-height:1.5;padding:8px;background:var(--panel2);border-radius:6px;">
-        💡 可直接在預覽圖上拖移 3D 場景圖來調整位置
-      </div>
-
-      <button onclick="downloadComposite()" style="width:100%;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#1a1410;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans TC',sans-serif;margin-top:auto;">
-        ⬇ 下載合成圖
-      </button>
-      <div id="comp-hint" style="font-size:10px;color:var(--text3);text-align:center;">請先上傳現場照片</div>
-    </div>
-
-    <!-- RIGHT: interactive preview -->
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#0a0a0a;position:relative;overflow:hidden;">
-      <div id="comp-preview-wrap" style="position:relative;display:inline-block;cursor:default;">
-        <canvas id="composite-canvas" style="display:block;max-width:100%;max-height:calc(100vh - 40px);"></canvas>
-        <!-- Draggable 3D overlay -->
-        <canvas id="comp-overlay-canvas" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
-        <!-- Drag handle (invisible, covers overlay area) -->
-        <div id="comp-drag-handle" style="position:absolute;cursor:move;border:2px dashed rgba(212,149,106,0.6);border-radius:4px;display:none;"></div>
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">預覽</div>
+        <div style="flex:1;background:#111;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:260px;">
+          <canvas id="composite-canvas" style="max-width:100%;max-height:100%;border-radius:6px;"></canvas>
+        </div>
+        <div id="comp-hint" style="font-size:10px;color:var(--text3);text-align:center;">請先上傳場景圖</div>
       </div>
     </div>
-
   </div>
 </div>
 
@@ -511,19 +464,7 @@
       <div id="si-notion-selected" style="display:none;background:var(--panel2);border:1px solid var(--accent);border-radius:8px;padding:12px;">
         <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:8px;">✓ 已選取攤位</div>
         <div id="si-notion-selected-info" style="font-size:12px;color:var(--text);line-height:1.8;"></div>
-        <!-- 上傳現場照片 -->
-        <div style="margin:10px 0 8px;">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:5px;">📷 上傳現場照片作為背景（強烈建議）</div>
-          <label style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px dashed var(--accent);border-radius:6px;padding:8px 10px;cursor:pointer;transition:border-color .15s;" onmouseenter="this.style.borderColor='var(--accent2)'" onmouseleave="this.style.borderColor='var(--accent)'">
-            <span style="font-size:20px;">🏬</span>
-            <span id="si-photo-label" style="font-size:12px;color:var(--accent);flex:1;">點擊上傳攤位現場照片</span>
-            <input type="file" accept="image/*" style="display:none;" onchange="loadNotionBoothPhoto(this)">
-          </label>
-          <div id="si-photo-preview" style="display:none;margin-top:6px;border-radius:6px;overflow:hidden;max-height:90px;">
-            <img id="si-photo-preview-img" style="width:100%;max-height:90px;object-fit:cover;display:block;">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;">
           <div>
             <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">寬度 cm</div>
             <input id="si-w" type="number" min="50" max="5000"
@@ -540,7 +481,22 @@
               style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:5px 7px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:12px;">
+        <div style="font-size:11px;color:var(--text3);margin-top:12px;margin-bottom:6px;">背景模式</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <label style="flex:1;background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:8px;cursor:pointer;display:flex;align-items:flex-start;gap:6px;">
+            <input type="radio" name="si-bg-mode" value="3d" checked style="margin-top:1px;accent-color:var(--accent);">
+            <div><div style="font-size:11px;color:var(--text);font-weight:500;">3D 貼圖</div><div style="font-size:10px;color:var(--text3);">照片貼牆面地板</div></div>
+          </label>
+          <label style="flex:1;background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:8px;cursor:pointer;display:flex;align-items:flex-start;gap:6px;">
+            <input type="radio" name="si-bg-mode" value="2d" style="margin-top:1px;accent-color:var(--accent);">
+            <div><div style="font-size:11px;color:var(--text);font-weight:500;">2D 底圖</div><div style="font-size:10px;color:var(--text3);">照片當背景疊合</div></div>
+          </label>
+          <label style="flex:1;background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:8px;cursor:pointer;display:flex;align-items:flex-start;gap:6px;">
+            <input type="radio" name="si-bg-mode" value="none" style="margin-top:1px;accent-color:var(--accent);">
+            <div><div style="font-size:11px;color:var(--text);font-weight:500;">僅尺寸</div><div style="font-size:10px;color:var(--text3);">只套用空間大小</div></div>
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;">
           <button onclick="cancelNotionSelection()"
             style="flex:1;padding:8px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">取消</button>
           <button onclick="applyNotionBooth()"
@@ -549,59 +505,58 @@
       </div>
     </div>
 
-    <!-- Tab: Photo upload → AI 3D scene -->
+    <!-- Tab: Photo upload -->
     <div id="si-panel-photo" style="flex:1;overflow-y:auto;padding:16px 20px 20px;display:none;flex-direction:column;gap:12px;">
-      <div style="font-size:12px;color:var(--text2);line-height:1.6;padding:8px;background:var(--panel2);border-radius:6px;">
-        上傳一張空間照片，AI 會分析地板、牆面、天花板、空間特徵，建立對應的 3D 場景，讓你直接在真實比例的空間裡擺設備。
-      </div>
-      <label id="photo-upload-label" style="display:block;background:var(--panel2);border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <label style="display:block;background:var(--panel2);border:2px dashed var(--border);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s;" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
         <div style="font-size:32px;margin-bottom:8px;">📷</div>
-        <div style="font-size:13px;color:var(--text2);">上傳空間照片</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;">建議從攤位角落拍攝，盡量拍到地板、牆、天花板</div>
+        <div style="font-size:13px;color:var(--text2);">點擊上傳空間照片</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">建議角度：站在角落往內拍，AI 自動估算尺寸</div>
         <input type="file" accept="image/*" style="display:none;" onchange="loadSpacePhoto(this)">
       </label>
-
-      <div id="space-preview-wrap" style="display:none;background:#111;border-radius:8px;overflow:hidden;max-height:160px;align-items:center;justify-content:center;">
-        <img id="space-preview-img" style="max-width:100%;max-height:160px;object-fit:contain;display:block;">
+      <div id="space-preview-wrap" style="display:none;background:#111;border-radius:8px;overflow:hidden;max-height:180px;align-items:center;justify-content:center;">
+        <img id="space-preview-img" style="max-width:100%;max-height:180px;object-fit:contain;display:block;">
       </div>
-
-      <div id="space-analyze-section" style="display:none;flex-direction:column;gap:10px;">
-        <!-- AI status -->
-        <div id="space-ai-status" style="font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px;">
-          <div class="spinner"></div><span id="space-ai-msg">AI 分析照片中...</span>
+      <div id="space-analyze-section" style="display:none;">
+        <div id="space-ai-status" style="font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <div class="spinner"></div><span id="space-ai-msg">AI 分析中...</span>
         </div>
-
-        <!-- Result form -->
-        <div id="space-dims-form" style="display:none;flex-direction:column;gap:10px;">
-          <div style="font-size:11px;color:var(--text3);padding:8px;background:var(--panel2);border-radius:6px;line-height:1.7;">
+        <div id="space-dims-form" style="display:none;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;padding:8px;background:var(--panel2);border-radius:6px;line-height:1.6;">
             <span id="space-ai-desc"></span>
           </div>
-
-          <!-- 空間尺寸 -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
             <div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">攤位寬 cm</div>
-              <input id="space-w" type="number" min="50" max="5000" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">空間寬度 cm</div>
+              <input id="space-w" type="number" min="50" max="5000"
+                style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
             </div>
             <div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">攤位深 cm</div>
-              <input id="space-d" type="number" min="50" max="5000" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">空間深度 cm</div>
+              <input id="space-d" type="number" min="50" max="5000"
+                style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
             </div>
             <div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">天花板高 cm</div>
-              <input id="space-h" type="number" min="100" max="2000" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">天花板高度 cm</div>
+              <input id="space-h" type="number" min="100" max="2000"
+                style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
             </div>
           </div>
-
-          <!-- AI 分析到的場景特徵 -->
-          <div id="space-features-wrap" style="display:none;background:var(--panel2);border-radius:6px;padding:10px;">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">AI 識別到的空間特徵</div>
-            <div id="space-features" style="font-size:11px;color:var(--text2);line-height:1.8;"></div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">背景模式</div>
+          <div style="display:flex;gap:6px;margin-bottom:14px;">
+            <label style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:8px;cursor:pointer;display:flex;align-items:flex-start;gap:6px;">
+              <input type="radio" name="bg-mode-radio" value="3d" checked style="margin-top:1px;accent-color:var(--accent);">
+              <div><div style="font-size:11px;color:var(--text);font-weight:500;">3D 貼圖</div><div style="font-size:10px;color:var(--text3);">照片貼牆面地板</div></div>
+            </label>
+            <label style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:8px;cursor:pointer;display:flex;align-items:flex-start;gap:6px;">
+              <input type="radio" name="bg-mode-radio" value="2d" style="margin-top:1px;accent-color:var(--accent);">
+              <div><div style="font-size:11px;color:var(--text);font-weight:500;">2D 底圖</div><div style="font-size:10px;color:var(--text3);">照片當背景疊合</div></div>
+            </label>
           </div>
-
           <div style="display:flex;gap:8px;">
-            <button onclick="closeSpaceImport()" style="flex:1;padding:8px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">取消</button>
-            <button onclick="applySpaceImport()" style="flex:2;padding:8px;background:var(--accent);border:none;border-radius:6px;color:#1a1410;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">✓ 生成3D場景</button>
+            <button onclick="closeSpaceImport()"
+              style="flex:1;padding:8px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:13px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">取消</button>
+            <button onclick="applySpaceImport()"
+              style="flex:2;padding:8px;background:var(--accent);border:none;border-radius:6px;color:#1a1410;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">✓ 套用空間</button>
           </div>
         </div>
       </div>
@@ -721,13 +676,11 @@ const ITEMS = [
   {id:'shelf_wall_1',  cat:'shelving', name:'壁掛層板',         icon:'📐', w:100, d:25,  h:20,  cost:0, shape:'shelf_wall',  color:'#c8a87a', isDefault:true},
 
   // 背板
-  {id:'bw_full',    cat:'backwall', name:'全版背板',          icon:'🖼', w:300, d:5,  h:250, cost:0, shape:'backwall',        color:'#f0ece6'},
-  {id:'bw_half',    cat:'backwall', name:'半版背板',           icon:'🖼', w:150, d:5,  h:250, cost:0, shape:'backwall',        color:'#f0ece6'},
-  {id:'bw_wide',    cat:'backwall', name:'橫版背板',           icon:'🖼', w:300, d:5,  h:150, cost:0, shape:'backwall',        color:'#f0ece6'},
-  {id:'bw_x60',     cat:'backwall', name:'X展架 60×160',       icon:'🪧', w:60,  d:10, h:160, cost:0, shape:'backwall',        color:'#f0ece6'},
-  {id:'bw_escwrap', cat:'backwall', name:'手扶梯包覆背板',      icon:'🔲', w:220, d:5,  h:223, cost:0, shape:'escalator_wrap',  color:'#f0ece6',
-   spec:{size:'左梯形(22→116)×223 + 中176×223 cm', note:'新光三越中港B2手扶梯口專用，兩面可貼輸出'}},
-  {id:'bw_custom',  cat:'backwall', name:'背板 自訂',          icon:'✏️', w:150, d:5,  h:200, cost:0, shape:'backwall',        color:'#f0ece6', isCustomBackwall:true},
+  {id:'bw_full',    cat:'backwall', name:'全版背板',       icon:'🖼', w:300, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
+  {id:'bw_half',    cat:'backwall', name:'半版背板',        icon:'🖼', w:150, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
+  {id:'bw_wide',    cat:'backwall', name:'橫版背板',        icon:'🖼', w:300, d:5,  h:150, cost:0, shape:'backwall',   color:'#f0ece6'},
+  {id:'bw_x60',     cat:'backwall', name:'X展架 60×160',    icon:'🪧', w:60,  d:10, h:160, cost:0, shape:'backwall',   color:'#f0ece6'},
+  {id:'bw_custom',  cat:'backwall', name:'背板 自訂',       icon:'✏️', w:150, d:5,  h:200, cost:0, shape:'backwall',   color:'#f0ece6', isCustomBackwall:true},
   {id:'sign_a1',    cat:'backwall', name:'立牌 A1',         icon:'📋', w:59,  d:10, h:84,  cost:0, shape:'sign_stand', color:'#d4a87a'},
   {id:'sign_a2',    cat:'backwall', name:'立牌 A2',         icon:'📋', w:42,  d:10, h:59,  cost:0, shape:'sign_stand', color:'#d4a87a'},
   {id:'sign_a3',    cat:'backwall', name:'立牌 A3',         icon:'📋', w:30,  d:10, h:42,  cost:0, shape:'sign_stand', color:'#d4a87a'},
@@ -802,13 +755,8 @@ function init(){
 
   renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer:true, alpha:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 3));
-  // Use window size minus panels as fallback if wrap hasn't laid out yet
-  const initW = wrap.clientWidth || (window.innerWidth - 400);
-  const initH = wrap.clientHeight || (window.innerHeight - 44);
-  renderer.setSize(initW, initH);
-  camera.aspect = initW / initH;
-  camera.updateProjectionMatrix();
-  renderer.setClearColor(0x1a1410, 1);
+  renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+  renderer.setClearColor(0x1a1410, 1); // default opaque, goes transparent when bg image loaded
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
@@ -840,172 +788,9 @@ function init(){
   setupEvents(canvas, wrap);
   animate();
   window.addEventListener('resize', onResize);
-  // Deferred resize to pick up correct dimensions after layout
-  requestAnimationFrame(onResize);
 }
 
 // ===================== BOOTH =====================
-
-// 建立新光三越中港 B2 手扶梯口 3D 場景
-function buildShinkongB2Scene(){
-  // 清空現有場景
-  if(floorMesh) scene.remove(floorMesh);
-  if(wallBack)  scene.remove(wallBack);
-  if(wallLeft)  scene.remove(wallLeft);
-  if(wallRight) scene.remove(wallRight);
-  if(gridHelper) scene.remove(gridHelper);
-  // 重設尺寸
-  boothW = 200; boothD = 280;
-  document.getElementById('booth-w-input').value = 200;
-  document.getElementById('booth-d-input').value = 280;
-
-  const W = boothW*U, D = boothD*U;
-  const roomW = 600*U, roomD = 500*U, roomH = 400*U;
-
-  // ── 地板：白色大理石 ──
-  const floorMat = new THREE.MeshLambertMaterial({color:0xf0ece8});
-  floorMesh = new THREE.Mesh(new THREE.BoxGeometry(roomW, 0.5*U, roomD), floorMat);
-  floorMesh.receiveShadow = true;
-  floorMesh.userData.isFloor = true;
-  scene.add(floorMesh);
-
-  // 黑色菱形磁磚（用小方塊散布）
-  const tileMat = new THREE.MeshLambertMaterial({color:0x222222});
-  const tileSpacing = 80*U;
-  for(let x = -roomW/2 + tileSpacing; x < roomW/2; x += tileSpacing){
-    for(let z = -roomD/2 + tileSpacing; z < roomD/2; z += tileSpacing){
-      const tile = new THREE.Mesh(new THREE.BoxGeometry(8*U, 0.6*U, 8*U), tileMat);
-      tile.rotation.y = Math.PI/4;
-      tile.position.set(x, 0.3*U, z);
-      scene.add(tile);
-    }
-  }
-
-  // ── 後牆：米白大理石 ──
-  const wallMat = new THREE.MeshLambertMaterial({color:0xf0ede6});
-  wallBack = new THREE.Mesh(new THREE.BoxGeometry(roomW, roomH, 2*U), wallMat);
-  wallBack.position.set(0, roomH/2, -roomD/2);
-  wallBack.receiveShadow = true;
-  scene.add(wallBack);
-
-  // ── 左牆（手扶梯側，深色）──
-  const darkMat = new THREE.MeshLambertMaterial({color:0x222222});
-  wallLeft = new THREE.Mesh(new THREE.BoxGeometry(2*U, roomH, roomD), darkMat);
-  wallLeft.position.set(-roomW/2, roomH/2, 0);
-  scene.add(wallLeft);
-
-  // ── 右牆（米白）──
-  wallRight = new THREE.Mesh(new THREE.BoxGeometry(2*U, roomH, roomD), wallMat);
-  wallRight.position.set(roomW/2, roomH/2, 0);
-  scene.add(wallRight);
-
-  // ── 天花板（斜面，左高右低 — 手扶梯天花效果）──
-  const ceilMat = new THREE.MeshLambertMaterial({color:0xe8e4de});
-  // 水平天花主體
-  const ceil = new THREE.Mesh(new THREE.BoxGeometry(roomW*0.6, 2*U, roomD), ceilMat);
-  ceil.position.set(roomW*0.2, roomH, 0);
-  scene.add(ceil);
-  // 斜面天花（左側，跟手扶梯走向）
-  const slopeAngle = 0.35;
-  const slopeLen = Math.sqrt((roomH*0.3)*(roomH*0.3) + (roomW*0.4)*(roomW*0.4));
-  const slope = new THREE.Mesh(new THREE.BoxGeometry(slopeLen, 2*U, roomD), ceilMat);
-  slope.rotation.z = slopeAngle;
-  slope.position.set(-roomW*0.22, roomH*0.85, 0);
-  scene.add(slope);
-
-  // ── 嵌燈（天花板） ──
-  const lightMat = new THREE.MeshLambertMaterial({color:0xfffde8, emissive:0xffee88, emissiveIntensity:0.5});
-  [[-roomW*0.1, roomH-1*U, -roomD*0.2],[roomW*0.15, roomH-1*U, -roomD*0.2],[roomW*0.1, roomH-1*U, roomD*0.1]].forEach(([x,y,z])=>{
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(3*U, 3*U, 1*U, 12), lightMat);
-    l.position.set(x,y,z); scene.add(l);
-  });
-
-  // ── 右側：大型數位看板 ──
-  const screenMat = new THREE.MeshLambertMaterial({color:0x1a3a6a, emissive:0x1155aa, emissiveIntensity:0.4});
-  const screen = new THREE.Mesh(new THREE.BoxGeometry(2*U, 120*U, 80*U), screenMat);
-  screen.position.set(roomW/2-1*U, 100*U, -50*U);
-  scene.add(screen);
-  // 看板外框
-  const frameMat = new THREE.MeshLambertMaterial({color:0x111111});
-  const screenFrame = new THREE.Mesh(new THREE.BoxGeometry(3*U, 126*U, 86*U), frameMat);
-  screenFrame.position.set(roomW/2-1.5*U, 100*U, -50*U);
-  scene.add(screenFrame);
-
-  // ── 右後方：Food Market 拱形大理石門框 ──
-  const archMat = new THREE.MeshLambertMaterial({color:0xe8e0d4});
-  // 門框左右柱
-  [[-40*U, 40*U]].forEach(([xl, xr])=>{
-    [xl, xr].forEach(ax=>{
-      const col = new THREE.Mesh(new THREE.BoxGeometry(10*U, 200*U, 8*U), archMat);
-      col.position.set(ax + roomW*0.25, 100*U, -roomD/2 + 4*U);
-      scene.add(col);
-    });
-  });
-  // 門框橫樑
-  const lintel = new THREE.Mesh(new THREE.BoxGeometry(90*U, 15*U, 8*U), archMat);
-  lintel.position.set(roomW*0.25, 200*U, -roomD/2 + 4*U);
-  scene.add(lintel);
-  // 拱形頂（半圓）
-  const archTop = new THREE.Mesh(
-    new THREE.CylinderGeometry(45*U, 45*U, 8*U, 20, 1, false, 0, Math.PI),
-    archMat
-  );
-  archTop.rotation.x = Math.PI/2;
-  archTop.position.set(roomW*0.25, 215*U, -roomD/2 + 4*U);
-  scene.add(archTop);
-
-  // ── 左側：手扶梯欄杆 ──
-  const glassBanisterMat = new THREE.MeshLambertMaterial({color:0xc8e0f0, transparent:true, opacity:0.4});
-  const banisterMat = new THREE.MeshLambertMaterial({color:0x888888});
-  // 欄杆玻璃
-  const banister = new THREE.Mesh(new THREE.BoxGeometry(2*U, 90*U, 200*U), glassBanisterMat);
-  banister.position.set(-roomW*0.2, 45*U, 30*U);
-  scene.add(banister);
-  // 欄杆不鏽鋼頂條
-  const handrail = new THREE.Mesh(new THREE.BoxGeometry(3*U, 3*U, 200*U), banisterMat);
-  handrail.position.set(-roomW*0.2, 92*U, 30*U);
-  scene.add(handrail);
-
-  // ── 攤位區域地板標示（紅色邊線）──
-  const lineMat = new THREE.MeshLambertMaterial({color:0xdd3333});
-  // 前邊
-  const l1 = new THREE.Mesh(new THREE.BoxGeometry(W, 0.8*U, 1*U), lineMat);
-  l1.position.set(0, 0.4*U, D/2); scene.add(l1);
-  // 後邊
-  const l2 = new THREE.Mesh(new THREE.BoxGeometry(W, 0.8*U, 1*U), lineMat);
-  l2.position.set(0, 0.4*U, -D/2); scene.add(l2);
-  // 左邊
-  const l3 = new THREE.Mesh(new THREE.BoxGeometry(1*U, 0.8*U, D), lineMat);
-  l3.position.set(-W/2, 0.4*U, 0); scene.add(l3);
-  // 右邊
-  const l4 = new THREE.Mesh(new THREE.BoxGeometry(1*U, 0.8*U, D), lineMat);
-  l4.position.set(W/2, 0.4*U, 0); scene.add(l4);
-
-  // 格線（攤位區內）
-  gridHelper = new THREE.GridHelper(Math.max(W,D), Math.max(boothW,boothD)/20, 0x888888, 0x555555);
-  gridHelper.position.y = 0.5*U;
-  scene.add(gridHelper);
-
-  // 場景背景與燈光
-  scene.background = new THREE.Color(0x1a1814);
-  scene.fog = new THREE.Fog(0x1a1814, 300, 600);
-
-  // 調整相機位置適合這個空間
-  cameraRadius = 160;
-  cameraPhi = 0.5;
-  cameraTheta = 0.3;
-  cameraTarget.set(0, 20*U, 0);
-  updateCamera();
-
-  // 更新頂部尺寸輸入
-  document.getElementById('booth-w-input').value = 200;
-  document.getElementById('booth-d-input').value = 280;
-
-  // 關閉背景圖（用純 3D 場景）
-  getBgLayer().style.backgroundImage = 'none';
-  renderer.setClearColor(0x1a1814, 1);
-}
-
 function buildBooth(){
   if(floorMesh) scene.remove(floorMesh);
   if(wallBack) scene.remove(wallBack);
@@ -1420,43 +1205,26 @@ function buildMesh(item, color){
       board.position.y = h/2; board.castShadow=true; group.add(board);
       const trim = new THREE.Mesh(new THREE.BoxGeometry(w+1*U,h+1*U,d/2), matDark);
       trim.position.y = h/2; group.add(trim); board.renderOrder=1;
-      const popSM = new THREE.Mesh(new THREE.PlaneGeometry(w*0.96, h*0.96),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
-      popSM.position.set(0, h/2, d/2+0.1*U);
-      popSM.userData.isPOP=true; popSM.userData.popSide='front';
-      group.add(popSM); group.userData.popFront=popSM;
       break;
     }
     case 'sign_stand':{
-      const boardH = h*0.6, boardY = h*0.7;
-      const board = new THREE.Mesh(new THREE.BoxGeometry(w, boardH, d), mat);
-      board.position.y = boardY; group.add(board);
+      const board = new THREE.Mesh(new THREE.BoxGeometry(w,h*0.6,d), mat);
+      board.position.y = h*0.7; group.add(board);
       const pole = new THREE.Mesh(new THREE.BoxGeometry(1.5*U,h*0.4,1.5*U), matDark);
       pole.position.y = h*0.2; group.add(pole);
       const base2 = new THREE.Mesh(new THREE.BoxGeometry(w*0.6,1.5*U,w*0.6), matDark);
       base2.position.y = 0.75*U; group.add(base2);
-      const popSS = new THREE.Mesh(new THREE.PlaneGeometry(w*0.94, boardH*0.94),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
-      popSS.position.set(0, boardY, d/2+0.1*U);
-      popSS.userData.isPOP=true; popSS.userData.popSide='front';
-      group.add(popSS); group.userData.popFront=popSS;
       break;
     }
     case 'chalkboard':{
-      const cbH = h*0.7;
-      const board = new THREE.Mesh(new THREE.BoxGeometry(w,cbH,d), new THREE.MeshLambertMaterial({color:0x1a2a1a}));
+      const board = new THREE.Mesh(new THREE.BoxGeometry(w,h*0.7,d), new THREE.MeshLambertMaterial({color:0x1a2a1a}));
       board.position.y = h*0.7; group.add(board);
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(w+2*U,cbH+2*U,d*0.4), matDark);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(w+2*U,h*0.7+2*U,d*0.4), matDark);
       frame.position.y = h*0.7; group.add(frame); board.renderOrder=1;
       const pole2 = new THREE.Mesh(new THREE.BoxGeometry(1.5*U,h*0.3,1.5*U), matDark);
       pole2.position.y = h*0.15; group.add(pole2);
       const base3 = new THREE.Mesh(new THREE.BoxGeometry(w*0.5,1.5*U,w*0.4), matDark);
       base3.position.y = 0.75*U; group.add(base3);
-      const popCB = new THREE.Mesh(new THREE.PlaneGeometry(w*0.94, cbH*0.94),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
-      popCB.position.set(0, h*0.7, d/2+0.1*U);
-      popCB.userData.isPOP=true; popCB.userData.popSide='front';
-      group.add(popCB); group.userData.popFront=popCB;
       break;
     }
     case 'spotlight':{
@@ -1687,86 +1455,21 @@ function buildMesh(item, color){
     }
     case 'backwall_l':{
       // L形背板：直立主板 + 側向延伸板
-      const mainW = w * 0.65;
-      const sideW = w - mainW;
-      const sideH = h * 0.5;
+      const mainW = w * 0.65;   // 主板寬
+      const sideW = w - mainW;  // 側板（L的橫段）
+      const sideH = h * 0.5;    // 側板高
+      // 主板
       const lMain = new THREE.Mesh(new THREE.BoxGeometry(mainW, h, d), mat);
       lMain.position.set(-sideW/2, h/2, 0); lMain.castShadow=true; group.add(lMain);
+      // 側板（往右延伸，下半段）
       const lSide = new THREE.Mesh(new THREE.BoxGeometry(sideW, sideH, d), mat);
       lSide.position.set(mainW/2, sideH/2, 0); group.add(lSide);
+      // POP 正面（主板）
       const popL = new THREE.Mesh(new THREE.PlaneGeometry(mainW*0.97, h*0.97),
         new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
       popL.position.set(-sideW/2, h/2, d/2+0.1*U);
       popL.userData.isPOP=true; popL.userData.popSide='front';
       group.add(popL); group.userData.popFront=popL;
-      break;
-    }
-    case 'escalator_wrap':{
-      // ── 手扶梯包覆背板（立體）──
-      // 正面板：面向客人，矩形 176×h，垂直
-      // 側板：從正面板左端往後方延伸（往 +Z），梯形（下寬116、上窄22）
-      const thick = d;
-      const midW  = 176*U;
-      const botW  = 116*U;
-      const topW  = 22*U;
-
-      // ── 正面板 ──
-      const frontBoard = new THREE.Mesh(new THREE.BoxGeometry(midW, h, thick), mat);
-      frontBoard.position.set(0, h/2, 0);
-      frontBoard.castShadow = true;
-      group.add(frontBoard);
-
-      // ── 側板：梯形，往後方（+Z）延伸 ──
-      // 用 Shape 建梯形（俯視是梯形：底 116cm、頂 22cm）
-      // 從正面板左端往後延伸，梯形寬邊在底部（地面），窄邊在頂部（天花板方向是高度不是寬）
-      // 實際是：側板高 = h，側板深度從底部116漸收到頂部22
-      // 用 ExtrudeGeometry：Shape 在 XY 平面，擠出厚度 thick
-      const sideShape = new THREE.Shape();
-      sideShape.moveTo(0,    0);     // 底前（連接正面板）
-      sideShape.lineTo(botW, 0);     // 底後（延伸 116cm）
-      sideShape.lineTo(topW, h);     // 頂後（延伸 22cm，高 223cm）
-      sideShape.lineTo(0,    h);     // 頂前
-      sideShape.closePath();
-
-      const extOpts = {depth: thick, bevelEnabled: false};
-      const sideGeo = new THREE.ExtrudeGeometry(sideShape, extOpts);
-      const sideMesh = new THREE.Mesh(sideGeo, mat);
-
-      // Shape 在 XY 平面（X=往後深度，Y=高度），旋轉使 X 對齊 Z 軸（往後）
-      sideMesh.rotation.y = Math.PI/2;
-      // 定位到正面板左端
-      sideMesh.position.set(-midW/2, 0, thick);
-      sideMesh.castShadow = true;
-      group.add(sideMesh);
-
-      // 頂部壓條
-      const capMat = new THREE.MeshLambertMaterial({color:0x777777});
-      const capF = new THREE.Mesh(new THREE.BoxGeometry(midW, 2*U, thick+0.5*U), capMat);
-      capF.position.set(0, h+1*U, 0); group.add(capF);
-
-      // ── POP 貼面 ──
-      // 正面
-      const popF = new THREE.Mesh(
-        new THREE.PlaneGeometry(midW*0.97, h*0.97),
-        new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, side:THREE.FrontSide})
-      );
-      popF.position.set(0, h/2, thick/2+0.1*U);
-      popF.userData.isPOP=true; popF.userData.popSide='front';
-      group.add(popF);
-
-      // 側板面（面向走道，朝 -X 方向）
-      const avgD = (botW+topW)/2;
-      const popS = new THREE.Mesh(
-        new THREE.PlaneGeometry(avgD*0.85, h*0.9),
-        new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, side:THREE.DoubleSide})
-      );
-      popS.rotation.y = Math.PI/2;
-      popS.position.set(-midW/2-0.2*U, h/2, avgD/2+thick);
-      popS.userData.isPOP=true; popS.userData.popSide='left';
-      group.add(popS);
-
-      group.userData.popFront = popF;
-      group.userData.popLeft  = popS;
       break;
     }
     case 'steel_shelf':{
@@ -2200,31 +1903,23 @@ function selectObject(obj){
   document.getElementById('prop-x').value = Math.round(obj.x/U);
   document.getElementById('prop-z').value = Math.round(obj.z/U);
   document.getElementById('prop-rot').value = Math.round(obj.rot*180/Math.PI);
-  // show POP panel
-  const multiPOPShapes = ['cake_square','cake_jewel','cake_desktop','steel_table','chest','escalator_wrap'];
-  const singlePOPShapes = ['cylinder','backwall','backwall_arch','backwall_l','sign_stand','sign_main','chalkboard'];
-  const isMultiPOP  = multiPOPShapes.includes(obj.item.shape);
-  const isSinglePOP = singlePOPShapes.includes(obj.item.shape);
-  // Also detect via userData (custom items may have popFront set)
-  const hasPOPMesh  = !!(obj.mesh.userData.popFront);
-  const hasPOP      = isMultiPOP || isSinglePOP || hasPOPMesh;
-  document.getElementById('pop-panel').style.display  = hasPOP      ? 'block' : 'none';
-  document.getElementById('pop-single').style.display = (isSinglePOP || (hasPOPMesh && !isMultiPOP)) ? 'block' : 'none';
-  document.getElementById('pop-multi').style.display  = isMultiPOP  ? 'flex'  : 'none';
+  // show POP panel — fridge=single face, table=three faces
+  const isMultiPOP = ['cake_square','cake_jewel','cake_desktop','steel_table','chest'].includes(obj.item.shape);
+  const isSinglePOP = obj.item.shape === 'cylinder';
+  const isBackwall = obj.item.shape === 'backwall';
+  const hasPOP     = isMultiPOP || isSinglePOP || isBackwall;
+  document.getElementById('pop-panel').style.display  = hasPOP       ? 'block' : 'none';
+  document.getElementById('pop-single').style.display = (isSinglePOP||isBackwall) ? 'block' : 'none';
+  document.getElementById('pop-multi').style.display  = isMultiPOP   ? 'flex'  : 'none';
   // reset label highlights for multi-face
   if(isMultiPOP){
-    const isEscWrap = obj.item.shape === 'escalator_wrap';
-    const faceLabels = {front: isEscWrap ? '中間面' : '正面', left: isEscWrap ? '側面' : '左側', right: '右側'};
     ['front','left','right'].forEach(side=>{
       const lbl = document.getElementById('pop-label-'+side);
       if(lbl){
         const hasTex = findPOPMeshBySide(obj.mesh, side)?.userData?.hasPOP;
         lbl.style.borderColor = hasTex ? 'var(--green,#7eb87a)' : 'var(--accent)';
         lbl.style.color       = hasTex ? 'var(--green,#7eb87a)' : 'var(--accent)';
-        lbl.childNodes[0].textContent = hasTex ? `✓ 已上傳` : `🖼 ${faceLabels[side]}`;
-        // 手扶梯包覆背板只有兩面，隱藏右側
-        const row = lbl.closest('div[style*="display:flex"]');
-        if(row) row.style.display = (isEscWrap && side==='right') ? 'none' : 'flex';
+        lbl.childNodes[0].textContent = hasTex ? '✓ 已上傳' : '🖼 上傳';
       }
     });
   }
@@ -2394,6 +2089,16 @@ function onMouseDown(e){
   mouseDownPos={x:e.clientX,y:e.clientY};
   pendingPOPSide = null;
 
+  // 平移虛擬空間：Shift + 左鍵拖曳，或滑鼠中鍵拖曳
+  // 這會移動 cameraTarget，讓整個 3D 模擬空間可以對齊實際照片。
+  if((e.button===0 && e.shiftKey) || e.button===1){
+    isPanning = true;
+    isOrbiting = false;
+    panStart = {x:e.clientX, y:e.clientY, cx:cameraTarget.x, cz:cameraTarget.z};
+    wrap.style.cursor = 'grabbing';
+    return;
+  }
+
   if(e.button===0){
     if(isDraggingGizmo) return;
     if(placingItem){
@@ -2508,9 +2213,10 @@ function ctxDuplicate(){
 
 function ctxResize(){
   if(!ctxTargetObj) return;
-  const obj = ctxTargetObj;  // 先存起來，hideContextMenu 會清空 ctxTargetObj
+  const obj = ctxTargetObj;
   hideContextMenu();
 
+  // Build inline resize popup near the object
   const existing = document.getElementById('resize-popup');
   if(existing) existing.remove();
 
@@ -2521,6 +2227,7 @@ function ctxResize(){
     border-radius:8px; padding:12px; z-index:500; box-shadow:0 8px 24px rgba(0,0,0,.5);
     width:220px; font-family:'Noto Sans TC',sans-serif;
   `;
+  // Position near centre of screen
   popup.style.left = '50%'; popup.style.top = '50%';
   popup.style.transform = 'translate(-50%,-50%)';
 
@@ -2540,27 +2247,33 @@ function ctxResize(){
     <div style="display:flex;gap:6px;">
       <button onclick="document.getElementById('resize-popup').remove()"
         style="flex:1;padding:6px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:11px;cursor:pointer;">取消</button>
-      <button onclick="applyResizeFor('${obj.id}')"
+      <button onclick="applyResize()"
         style="flex:2;padding:6px;background:var(--accent);border:none;border-radius:4px;color:#1a1410;font-size:12px;font-weight:500;cursor:pointer;">套用</button>
     </div>`;
   document.body.appendChild(popup);
 }
 
-function applyResizeFor(objId){
+function applyResize(){
   const popup = document.getElementById('resize-popup');
-  const obj = objects.find(o => o.id === objId);
-  if(!obj || !popup) return;
-  const w = parseInt(document.getElementById('rp-w').value)||obj.item.w;
-  const d = parseInt(document.getElementById('rp-d').value)||obj.item.d;
-  const h = parseInt(document.getElementById('rp-h').value)||obj.item.h;
+  if(!ctxTargetObj || !popup) return;
+  const w = parseInt(document.getElementById('rp-w').value)||ctxTargetObj.item.w;
+  const d = parseInt(document.getElementById('rp-d').value)||ctxTargetObj.item.d;
+  const h = parseInt(document.getElementById('rp-h').value)||ctxTargetObj.item.h;
   popup.remove();
 
-  const newItem = {...obj.item, w, d, h, name:`${obj.item.name.replace(/\s+\d+×\d+×\d+$/,'')} ${w}×${d}×${h}`};
+  // Rebuild mesh with new dimensions
+  const obj = ctxTargetObj;
+  const newItem = {...obj.item, w, d, h, name: `${obj.item.name.replace(/\s+\d+×\d+×\d+$/,'')} ${w}×${d}×${h}`};
   obj.item = newItem;
   const newMesh = buildMesh(newItem, obj.color);
   newMesh.position.copy(obj.mesh.position);
   newMesh.rotation.copy(obj.mesh.rotation);
-  newMesh.userData = {objId:obj.id, popFront:newMesh.userData.popFront, popLeft:newMesh.userData.popLeft, popRight:newMesh.userData.popRight};
+  newMesh.userData = {
+    objId: obj.id,
+    popFront: newMesh.userData.popFront,
+    popLeft:  newMesh.userData.popLeft,
+    popRight: newMesh.userData.popRight,
+  };
   scene.remove(obj.mesh);
   scene.add(newMesh);
   obj.mesh = newMesh;
@@ -2570,8 +2283,6 @@ function applyResizeFor(objId){
 }
 
 function ctxRotate(deg){
-  if(!ctxTargetObj) return;
-  ctxTargetObj.rot = (ctxTargetObj.rot || 0) + deg * Math.PI/180;
   ctxTargetObj.mesh.rotation.y = ctxTargetObj.rot;
   document.getElementById('prop-rot').value = Math.round(ctxTargetObj.rot * 180/Math.PI);
   hideContextMenu();
@@ -2718,6 +2429,7 @@ function onMouseUp(e){
   }
   isOrbiting=false;
   isPanning=false;
+  document.getElementById('canvas-wrap').style.cursor = '';
   // Only trigger POP upload if mouse barely moved (clean click, not a drag)
   if(pendingPOPSide && e.button===0){
     const dx = e.clientX - mouseDownPos.x;
@@ -3052,22 +2764,6 @@ function cancelNotionSelection(){
   document.getElementById('si-notion-selected').style.display = 'none';
 }
 
-let notionBoothPhotoUrl = null;
-
-function loadNotionBoothPhoto(input){
-  if(!input.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    notionBoothPhotoUrl = e.target.result;
-    // Show thumbnail
-    document.getElementById('si-photo-preview').style.display = 'block';
-    document.getElementById('si-photo-preview-img').src = notionBoothPhotoUrl;
-    document.getElementById('si-photo-label').textContent = '✓ 照片已上傳，套用攤位後顯示';
-    document.getElementById('si-photo-label').style.color = 'var(--green,#7eb87a)';
-  };
-  reader.readAsDataURL(input.files[0]);
-}
-
 function applyNotionBooth(){
   if(!selectedNotionBooth) return;
   const w = parseInt(document.getElementById('si-w').value)||300;
@@ -3080,42 +2776,13 @@ function applyNotionBooth(){
 
   buildBooth(); resetView();
 
-  // 牆/地板透明
-  if(floorMesh) floorMesh.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.08});
-  if(wallBack)  wallBack.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-  if(wallLeft)  wallLeft.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-  if(wallRight) wallRight.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-  if(gridHelper) gridHelper.visible = false;
-  scene.background = null; scene.fog = null;
-  renderer.setClearColor(0x000000, 0);
-
-  if(notionBoothPhotoUrl){
-    // 使用真實照片
-    spacePhotoDataUrl = notionBoothPhotoUrl;
-    getBgLayer().style.backgroundImage = `url(${notionBoothPhotoUrl})`;
-    getBgLayer().style.backgroundSize = 'cover';
-    getBgLayer().style.backgroundPosition = 'center';
-    if(floorMesh) floorMesh.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.08});
-    if(wallBack)  wallBack.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(wallLeft)  wallLeft.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(wallRight) wallRight.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(gridHelper) gridHelper.visible = false;
-    scene.background = null; scene.fog = null;
-    renderer.setClearColor(0x000000, 0);
-  } else if(selectedNotionBooth.id === '3761e16d-9c30-8191-889c-c380f3b470f4'){
-    // 台中新光三越中港 B2 — 使用專屬 3D 重建場景
-    buildShinkongB2Scene();
-  } else {
-    // 示意格子圖
-    generateBoothSceneBg(selectedNotionBooth, boothW, boothD);
-  }
-
-  spaceBgMode = '2d'; spaceBgVisible = true;
+  // 永遠生成空間示意背景
+  generateBoothSceneBg(selectedNotionBooth, boothW, boothD);
   document.getElementById('btn-bg-toggle').style.display = '';
   document.getElementById('btn-bg-mode').style.display = '';
-  document.getElementById('btn-bg-toggle').textContent = '👁 隱藏背景';
+  spaceBgMode = '2d';
+  spaceBgVisible = true;
   updateBgModeBtn();
-  notionBoothPhotoUrl = null;
   closeSpaceImport();
 }
 
@@ -3227,9 +2894,10 @@ function generateBoothSceneBg(booth, bw, bd){
   spaceBg2dImg.src = dataUrl;
   spaceBgVisible = true;
 
+  const canvasWrap = document.getElementById('canvas-wrap');
   getBgLayer().style.backgroundImage = `url(${dataUrl})`;
-  scene.background = null;
-  scene.fog = null;
+
+
   renderer.setClearColor(0x000000, 0);
 }
 
@@ -3238,47 +2906,20 @@ function loadSpacePhoto(input){
   const reader = new FileReader();
   reader.onload = e => {
     spacePhotoDataUrl = e.target.result;
-
-    // 1. 立刻把照片鋪到背景層
-    getBgLayer().style.backgroundImage = `url(${spacePhotoDataUrl})`;
-    getBgLayer().style.backgroundSize = 'cover';
-    getBgLayer().style.backgroundPosition = 'center';
-
-    // 2. 讓 Three.js 場景透明（可以看到底下的照片）
-    scene.background = null;
-    scene.fog = null;
-    renderer.setClearColor(0x000000, 0);
-
-    // 3. 讓地板和牆壁變成透明/半透明，融合進照片
-    if(floorMesh) floorMesh.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.08});
-    if(wallBack)  wallBack.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(wallLeft)  wallLeft.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(wallRight) wallRight.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(gridHelper) gridHelper.visible = false;
-
-    // 4. 顯示控制按鈕
-    document.getElementById('btn-bg-toggle').style.display = '';
-    document.getElementById('btn-bg-mode').style.display = '';
-    spaceBgMode = '2d';
-    spaceBgVisible = true;
-    updateBgModeBtn();
-    document.getElementById('btn-bg-toggle').textContent = '👁 隱藏背景';
-
-    // 5. Show preview + AI analysis
+    // Show preview
     const img = document.getElementById('space-preview-img');
     img.src = spacePhotoDataUrl;
-    document.getElementById('space-preview-wrap').style.display = 'flex';
+    const wrap = document.getElementById('space-preview-wrap');
+    wrap.style.display = 'flex';
+    // Start AI analysis
     document.getElementById('space-analyze-section').style.display = 'block';
     document.getElementById('space-dims-form').style.display = 'none';
     document.getElementById('space-ai-status').style.display = 'flex';
-    document.getElementById('space-ai-msg').textContent = '估算空間尺寸中（也可直接關閉此視窗操作）...';
+    document.getElementById('space-ai-msg').textContent = 'AI 分析空間尺寸中...';
     analyzeSpaceWithAI(spacePhotoDataUrl);
   };
   reader.readAsDataURL(input.files[0]);
 }
-
-// AI 分析空間照片，回傳精準場景資料
-let spaceAIData = null;
 
 async function analyzeSpaceWithAI(dataUrl){
   const base64 = dataUrl.split(',')[1];
@@ -3289,32 +2930,21 @@ async function analyzeSpaceWithAI(dataUrl){
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1200,
+        max_tokens: 600,
         messages: [{
           role: 'user',
           content: [
             {type:'image', source:{type:'base64', media_type:mediaType, data:base64}},
-            {type:'text', text:`你是一個精準的室內空間分析師。仔細觀察這張照片，分析以下細節，以 JSON 格式回傳，不要有任何其他文字：
+            {type:'text', text:`分析這張室內空間照片，估算空間的實際尺寸。
+請以 JSON 格式回傳，不要有任何其他文字：
 {
-  "booth_w": 攤位可用寬度cm,
-  "booth_d": 攤位可用深度cm,
-  "room_h": 天花板高度cm,
-  "floor_color": "地板主色 hex，例如 #f0ece8",
-  "wall_color": "牆面主色 hex，例如 #e8e4de",
-  "has_escalator": true/false,
-  "has_slanted_ceiling": true/false,
-  "has_arch_door": true/false,
-  "has_digital_screen": true/false,
-  "has_pillar": true/false,
-  "left_wall": "dark|light|escalator|open",
-  "right_wall": "dark|light|marble|open",
-  "floor_pattern": "plain|marble_with_diamond|tile_grid|wood",
-  "diamond_tile": true/false,
-  "lighting": "recessed|pendant|strip|mixed",
-  "desc": "一句話描述空間（中文20字內）",
-  "features": ["識別到的特徵1","特徵2","特徵3"]
+  "width": 空間寬度cm整數,
+  "depth": 空間深度cm整數,
+  "height": 天花板高度cm整數,
+  "desc": "一句話描述這個空間（中文，20字以內）",
+  "confidence": "high|medium|low"
 }
-注意：booth_w 和 booth_d 是快閃攤位的可用範圍，不是整個空間。如果照片是快閃攤位現場，估算攤位範圍；照片中如有地板膠帶標線請以此為準。`}
+如果無法判斷請給合理預設值（width:300, depth:300, height:280）。`}
           ]
         }]
       })
@@ -3322,30 +2952,21 @@ async function analyzeSpaceWithAI(dataUrl){
     const data = await res.json();
     const text = data.content?.[0]?.text || '';
     const clean = text.replace(/```json|```/g,'').trim();
-    const match = clean.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(match?.[0] || clean);
-    spaceAIData = parsed;
-
-    document.getElementById('space-w').value = parsed.booth_w || 300;
-    document.getElementById('space-d').value = parsed.booth_d || 300;
-    document.getElementById('space-h').value = parsed.room_h || 280;
-    document.getElementById('space-ai-desc').textContent = `AI 分析：${parsed.desc || '室內快閃空間'}`;
-
-    if(parsed.features?.length){
-      document.getElementById('space-features-wrap').style.display = 'block';
-      document.getElementById('space-features').innerHTML =
-        parsed.features.map(f=>`✓ ${f}`).join('<br>');
-    }
-    document.getElementById('space-ai-status').style.display = 'none';
-    document.getElementById('space-dims-form').style.display = 'flex';
+    const parsed = JSON.parse(clean);
+    document.getElementById('space-w').value = parsed.width || 300;
+    document.getElementById('space-d').value = parsed.depth || 300;
+    document.getElementById('space-h').value = parsed.height || 280;
+    document.getElementById('space-ai-desc').textContent =
+      `AI 估算：${parsed.desc || '室內空間'} | 信心度：${{high:'高',medium:'中',low:'低'}[parsed.confidence]||'中'}`;
+    document.getElementById('space-ai-status').style.display='none';
+    document.getElementById('space-dims-form').style.display='block';
   } catch(err) {
     document.getElementById('space-ai-msg').textContent = '分析失敗，請手動輸入尺寸';
-    const sp = document.getElementById('space-ai-status').querySelector('.spinner');
-    if(sp) sp.style.display = 'none';
+    document.getElementById('space-ai-status').querySelector('.spinner').style.display='none';
     document.getElementById('space-w').value = 300;
     document.getElementById('space-d').value = 300;
     document.getElementById('space-h').value = 280;
-    document.getElementById('space-dims-form').style.display = 'flex';
+    document.getElementById('space-dims-form').style.display='block';
   }
 }
 
@@ -3353,206 +2974,71 @@ function applySpaceImport(){
   const w = parseInt(document.getElementById('space-w').value)||300;
   const d = parseInt(document.getElementById('space-d').value)||300;
   const h = parseInt(document.getElementById('space-h').value)||280;
+  spaceBgMode = document.querySelector('input[name="bg-mode-radio"]:checked')?.value || '3d';
 
+  // Update booth size
   boothW = Math.min(w, 2000); boothD = Math.min(d, 2000);
   document.getElementById('booth-w-input').value = boothW;
   document.getElementById('booth-d-input').value = boothD;
 
-  // 根據 AI 分析結果建立精準 3D 場景
-  buildAIGeneratedScene(spaceAIData || {}, boothW, boothD, h);
-
-  document.getElementById('btn-bg-toggle').style.display = '';
-  document.getElementById('btn-bg-mode').style.display = '';
-  spaceBgMode = '2d';
-  spaceBgVisible = true;
-  document.getElementById('btn-bg-toggle').textContent = '👁 隱藏背景';
-  updateBgModeBtn();
-  closeSpaceImport();
-}
-
-function buildAIGeneratedScene(ai, bw, bd, ceilH){
-  // 清場
-  if(floorMesh) scene.remove(floorMesh);
-  if(wallBack)  scene.remove(wallBack);
-  if(wallLeft)  scene.remove(wallLeft);
-  if(wallRight) scene.remove(wallRight);
-  if(gridHelper) scene.remove(gridHelper);
-
-  const W = bw*U, D = bd*U, H = ceilH*U;
-  // 場景比攤位大一些，讓背景看起來有縱深
-  const rW = Math.max(W*3, 300*U);
-  const rD = Math.max(D*2.5, 250*U);
-  const rH = H;
-
-  const floorCol = new THREE.Color(ai.floor_color || '#f0ece8');
-  const wallCol  = new THREE.Color(ai.wall_color  || '#e8e4de');
-  const darkCol  = new THREE.Color(0x1a1a1a);
-
-  // ── 地板 ──
-  const floorMat = new THREE.MeshLambertMaterial({color: floorCol});
-  floorMesh = new THREE.Mesh(new THREE.BoxGeometry(rW, 0.5*U, rD), floorMat);
-  floorMesh.receiveShadow = true;
-  floorMesh.userData.isFloor = true;
-  scene.add(floorMesh);
-
-  // 黑色菱形磁磚（如果有）
-  if(ai.diamond_tile || ai.floor_pattern === 'marble_with_diamond'){
-    const tileMat = new THREE.MeshLambertMaterial({color:0x222222});
-    const tileSpacing = 70*U;
-    for(let x=-rW/2+tileSpacing; x<rW/2; x+=tileSpacing){
-      for(let z=-rD/2+tileSpacing; z<rD/2; z+=tileSpacing){
-        const tile = new THREE.Mesh(new THREE.BoxGeometry(7*U, 0.7*U, 7*U), tileMat);
-        tile.rotation.y = Math.PI/4;
-        tile.position.set(x, 0.35*U, z);
-        scene.add(tile);
-      }
+  // Apply photo as background
+  const img = new Image();
+  img.onload = ()=>{
+    spaceBg2dImg = img;
+    if(spaceBgMode === '3d'){
+      applySpaceTo3D(img, h);
+    } else {
+      applySpaceTo2D();
     }
-  }
-
-  // ── 後牆 ──
-  const wallMat = new THREE.MeshLambertMaterial({color: wallCol});
-  wallBack = new THREE.Mesh(new THREE.BoxGeometry(rW, rH, 2*U), wallMat);
-  wallBack.position.set(0, rH/2, -rD/2);
-  wallBack.receiveShadow = true;
-  scene.add(wallBack);
-
-  // ── 左牆（手扶梯側 → 深色） ──
-  const leftCol = (ai.left_wall === 'escalator' || ai.has_escalator) ? darkCol : wallCol;
-  wallLeft = new THREE.Mesh(new THREE.BoxGeometry(2*U, rH, rD), new THREE.MeshLambertMaterial({color:leftCol}));
-  wallLeft.position.set(-rW/2, rH/2, 0);
-  scene.add(wallLeft);
-
-  // ── 右牆 ──
-  const rightCol = ai.right_wall === 'marble' ? new THREE.Color(0xe8e0d5) : wallCol;
-  wallRight = new THREE.Mesh(new THREE.BoxGeometry(2*U, rH, rD), new THREE.MeshLambertMaterial({color:rightCol}));
-  wallRight.position.set(rW/2, rH/2, 0);
-  scene.add(wallRight);
-
-  // ── 天花板 ──
-  const ceilMat = new THREE.MeshLambertMaterial({color: new THREE.Color(0xe8e4de)});
-  if(ai.has_slanted_ceiling){
-    // 斜面天花
-    const ceilFlat = new THREE.Mesh(new THREE.BoxGeometry(rW*0.55, 2*U, rD), ceilMat);
-    ceilFlat.position.set(rW*0.2, rH, 0); scene.add(ceilFlat);
-    const slopeLen = Math.sqrt((rH*0.28)*(rH*0.28)+(rW*0.45)*(rW*0.45));
-    const slope = new THREE.Mesh(new THREE.BoxGeometry(slopeLen, 2*U, rD), ceilMat);
-    slope.rotation.z = Math.atan2(rH*0.28, rW*0.45);
-    slope.position.set(-rW*0.2, rH*0.86, 0); scene.add(slope);
-  } else {
-    const ceil = new THREE.Mesh(new THREE.BoxGeometry(rW, 2*U, rD), ceilMat);
-    ceil.position.set(0, rH, 0); scene.add(ceil);
-  }
-
-  // ── 嵌燈 ──
-  const ledMat = new THREE.MeshLambertMaterial({color:0xfffde8, emissive:0xffee88, emissiveIntensity:0.5});
-  const lightPositions = [[-rW*0.1,rH-1*U,0],[rW*0.15,rH-1*U,-rD*0.15],[rW*0.1,rH-1*U,rD*0.15]];
-  lightPositions.forEach(([x,y,z])=>{
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(2.5*U, 2.5*U, 1.2*U, 10), ledMat);
-    l.position.set(x,y,z); scene.add(l);
-  });
-
-  // ── 手扶梯欄杆（左側）──
-  if(ai.has_escalator){
-    const glassMat2 = new THREE.MeshLambertMaterial({color:0xc8e0f0, transparent:true, opacity:0.35});
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(2*U, 85*U, rD*0.55), glassMat2);
-    rail.position.set(-rW*0.25, 42*U, D*0.15); scene.add(rail);
-    const handrail = new THREE.Mesh(new THREE.BoxGeometry(3*U, 3*U, rD*0.55),
-      new THREE.MeshLambertMaterial({color:0x888888}));
-    handrail.position.set(-rW*0.25, 87*U, D*0.15); scene.add(handrail);
-  }
-
-  // ── 拱形門（右後方）──
-  if(ai.has_arch_door){
-    const archMat2 = new THREE.MeshLambertMaterial({color:0xe0d8cc});
-    [-35*U, 35*U].forEach(ax=>{
-      const col = new THREE.Mesh(new THREE.BoxGeometry(10*U, 190*U, 6*U), archMat2);
-      col.position.set(rW*0.2+ax, 95*U, -rD/2+3*U); scene.add(col);
-    });
-    const lintel2 = new THREE.Mesh(new THREE.BoxGeometry(80*U, 14*U, 6*U), archMat2);
-    lintel2.position.set(rW*0.2, 197*U, -rD/2+3*U); scene.add(lintel2);
-    const archTop2 = new THREE.Mesh(
-      new THREE.CylinderGeometry(40*U,40*U,6*U,20,1,false,0,Math.PI), archMat2);
-    archTop2.rotation.x=Math.PI/2;
-    archTop2.position.set(rW*0.2,212*U,-rD/2+3*U); scene.add(archTop2);
-  }
-
-  // ── 數位看板（右側）──
-  if(ai.has_digital_screen){
-    const scrMat = new THREE.MeshLambertMaterial({color:0x1a3a6a, emissive:0x1155aa, emissiveIntensity:0.4});
-    const scr = new THREE.Mesh(new THREE.BoxGeometry(2*U, 110*U, 72*U), scrMat);
-    scr.position.set(rW/2-1.5*U, 90*U, -rD*0.15); scene.add(scr);
-    const scrFrame = new THREE.Mesh(new THREE.BoxGeometry(3.5*U, 117*U, 79*U),
-      new THREE.MeshLambertMaterial({color:0x111111}));
-    scrFrame.position.set(rW/2-1.75*U, 90*U, -rD*0.15); scene.add(scrFrame);
-  }
-
-  // ── 攤位邊界紅線 ──
-  const lineMat2 = new THREE.MeshLambertMaterial({color:0xdd3333});
-  [[W, 0.8*U, 1*U, 0, 0.4*U, D/2],[W, 0.8*U, 1*U, 0, 0.4*U, -D/2],
-   [1*U, 0.8*U, D, -W/2, 0.4*U, 0],[1*U, 0.8*U, D, W/2, 0.4*U, 0]].forEach(([gw,gh,gd,gx,gy,gz])=>{
-    const l2 = new THREE.Mesh(new THREE.BoxGeometry(gw,gh,gd), lineMat2);
-    l2.position.set(gx,gy,gz); scene.add(l2);
-  });
-
-  // ── 網格 ──
-  gridHelper = new THREE.GridHelper(Math.max(W,D), Math.max(bw,bd)/20, 0x777777, 0x444444);
-  gridHelper.position.y = 0.6*U;
-  scene.add(gridHelper);
-
-  // 場景設定
-  scene.background = new THREE.Color(0x16140f);
-  scene.fog = new THREE.Fog(0x16140f, 300, 600);
-  renderer.setClearColor(0x16140f, 1);
-  getBgLayer().style.backgroundImage = 'none';
-
-  // 相機調整
-  cameraRadius = Math.max(W, D) * 3.5;
-  cameraPhi = 0.52;
-  cameraTheta = 0.3;
-  cameraTarget.set(0, 15*U, 0);
-  updateCamera();
+    buildBooth();
+    resetView();
+    // Show toggle buttons
+    document.getElementById('btn-bg-toggle').style.display='';
+    document.getElementById('btn-bg-mode').style.display='';
+    updateBgModeBtn();
+    closeSpaceImport();
+  };
+  img.src = spacePhotoDataUrl;
 }
 
 function applySpaceTo3D(img, ceilH){
+  // Create texture from photo
   const tex = new THREE.Texture(img);
-  tex.needsUpdate = true; tex.encoding = THREE.sRGBEncoding;
+  tex.needsUpdate = true;
+  tex.encoding = THREE.sRGBEncoding;
   spaceWallTex = tex;
-  if(wallBack) wallBack.material = new THREE.MeshLambertMaterial({map: tex});
+  // Apply to walls
+  const wallMat = new THREE.MeshLambertMaterial({map: tex});
+  if(wallBack)  wallBack.material  = wallMat;
+  if(wallLeft)  wallLeft.material  = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+  if(wallRight) wallRight.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+  // Floor keeps color
+  // Update wall height to match room
   spaceBgVisible = true;
 }
 
 function applySpaceTo2D(){
+  // 2D mode: photo as CSS background behind canvas
+  const canvas = document.getElementById('canvas-wrap');
   getBgLayer().style.backgroundImage = `url(${spacePhotoDataUrl})`;
-  scene.background = null; scene.fog = null;
-  renderer.setClearColor(0x000000, 0);
+  renderer.setClearColor(0x000000, 0); // transparent renderer
   spaceBgVisible = true;
 }
 
 function toggleSpaceBg(){
   spaceBgVisible = !spaceBgVisible;
   const btn = document.getElementById('btn-bg-toggle');
-  getBgLayer().style.backgroundImage = spaceBgVisible && spacePhotoDataUrl ? `url(${spacePhotoDataUrl})` : 'none';
-
-  if(spaceBgVisible){
-    scene.background = null;
-    scene.fog = null;
-    renderer.setClearColor(0x000000, 0);
-    // 透明牆/地板
-    if(floorMesh) floorMesh.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.08});
-    if(wallBack)  wallBack.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(wallLeft)  wallLeft.material  = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(wallRight) wallRight.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0});
-    if(gridHelper) gridHelper.visible = false;
+  if(spaceBgMode === '2d'){
+    const canvas = document.getElementById('canvas-wrap');
+    getBgLayer().style.backgroundImage = spaceBgVisible ? `url(${spacePhotoDataUrl})` : 'none';
+    renderer.setClearColor(spaceBgVisible ? 0x000000 : 0x1a1410, spaceBgVisible ? 0 : 1);
   } else {
-    scene.background = new THREE.Color(0x1a1410);
-    scene.fog = new THREE.Fog(0x1a1410, 200, 400);
-    renderer.setClearColor(0x1a1410, 1);
-    // 恢復牆/地板
-    if(floorMesh) floorMesh.material = new THREE.MeshLambertMaterial({color: new THREE.Color(floorColor)});
-    if(wallBack)  wallBack.material  = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
-    if(wallLeft)  wallLeft.material  = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
-    if(wallRight) wallRight.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
-    if(gridHelper) gridHelper.visible = true;
+    // 3D mode: show/hide wall texture
+    if(wallBack){
+      wallBack.material = spaceBgVisible && spaceWallTex
+        ? new THREE.MeshLambertMaterial({map: spaceWallTex})
+        : new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+    }
   }
   btn.textContent = spaceBgVisible ? '👁 隱藏背景' : '👁 顯示背景';
 }
@@ -3566,15 +3052,11 @@ function toggleBgMode(){
     if(wallBack) wallBack.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
     // Apply 2D
     getBgLayer().style.backgroundImage = spaceBgVisible ? `url(${spacePhotoDataUrl})` : 'none';
-    scene.background = null;
-    scene.fog = null;
     renderer.setClearColor(0x000000, 0);
   } else {
     // Switch to 3D
     spaceBgMode = '3d';
     getBgLayer().style.backgroundImage = 'none';
-    scene.background = new THREE.Color(0x1a1410);
-    scene.fog = new THREE.Fog(0x1a1410, 200, 400);
     renderer.setClearColor(0x1a1410, 1);
     if(wallBack && spaceWallTex && spaceBgVisible){
       wallBack.material = new THREE.MeshLambertMaterial({map: spaceWallTex});
@@ -3980,26 +3462,62 @@ function startPlacingAI(item){
 // ===================== SCENE COMPOSITE =====================
 let sceneBgImage = null;
 let boothSnapshotDataURL = null;
-let boothSnapshotImg = null; // cached Image object
-// Drag state (in preview canvas pixels)
-let compDrag = false;
-let compDragStart = {mx:0, my:0, ox:0, oy:0};
-// Current position/scale in preview-canvas space
-let compState = {x:0, y:0, scale:0.8, opacity:1.0};
+let boothSnapshotImage = null;
+let isCompositeDragging = false;
+let compDragStart = {x:0, y:0, compX:0, compY:0};
+
+function getCompositeState(){
+  return {
+    scaleVal: (parseFloat(document.getElementById('comp-scale')?.value || 80) || 80) / 100,
+    xOff: parseFloat(document.getElementById('comp-x')?.value || 0) || 0,
+    yOff: parseFloat(document.getElementById('comp-y')?.value || 0) || 0,
+    opac: (parseFloat(document.getElementById('comp-opacity')?.value || 100) || 100) / 100,
+  };
+}
+
+function setCompositeControl(id, value){
+  const el = document.getElementById(id);
+  if(el) el.value = value;
+}
+
+function syncCompositeLabels(){
+  const scale = document.getElementById('comp-scale')?.value || 80;
+  const x = document.getElementById('comp-x')?.value || 0;
+  const y = document.getElementById('comp-y')?.value || 0;
+  const opacity = document.getElementById('comp-opacity')?.value || 100;
+  const lblScale = document.getElementById('lbl-scale'); if(lblScale) lblScale.textContent = scale + '%';
+  const lblX = document.getElementById('lbl-x'); if(lblX) lblX.textContent = x;
+  const lblY = document.getElementById('lbl-y'); if(lblY) lblY.textContent = y;
+  const lblOpacity = document.getElementById('lbl-opacity'); if(lblOpacity) lblOpacity.textContent = opacity + '%';
+}
 
 function showComposite(){
+  // 匯出目前 3D 視角作為透明櫃位圖
+  const oldBg = scene.background;
+  const oldFog = scene.fog;
+  const oldClearAlpha = renderer.getClearAlpha ? renderer.getClearAlpha() : 1;
+  scene.background = null;
+  scene.fog = null;
+  renderer.setClearColor(0x000000, 0);
   renderer.render(scene, camera);
   boothSnapshotDataURL = renderer.domElement.toDataURL('image/png');
-  boothSnapshotImg = null; // reset cache
+  scene.background = oldBg;
+  scene.fog = oldFog;
+  renderer.setClearColor(0x1a1410, oldClearAlpha);
+
+  boothSnapshotImage = new Image();
+  boothSnapshotImage.onload = () => updateComposite();
+  boothSnapshotImage.src = boothSnapshotDataURL;
+
   document.getElementById('composite-overlay').style.display = 'flex';
-  // Load snapshot image then draw
-  const img = new Image();
-  img.onload = () => { boothSnapshotImg = img; autoFitComposite(); };
-  img.src = boothSnapshotDataURL;
+  setupCompositeDragEvents();
+  syncCompositeLabels();
+  updateComposite();
 }
 
 function closeComposite(){
   document.getElementById('composite-overlay').style.display = 'none';
+  isCompositeDragging = false;
 }
 
 function loadSceneBg(input){
@@ -4009,20 +3527,8 @@ function loadSceneBg(input){
     const img = new Image();
     img.onload = () => {
       sceneBgImage = img;
-      // Resize preview canvas to match photo aspect ratio
-      const cvs = document.getElementById('composite-canvas');
-      const maxW = window.innerWidth - 280, maxH = window.innerHeight - 40;
-      const r = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
-      cvs.width  = Math.round(img.naturalWidth  * r);
-      cvs.height = Math.round(img.naturalHeight * r);
-      // Also size the overlay canvas
-      const oc = document.getElementById('comp-overlay-canvas');
-      oc.width = cvs.width; oc.height = cvs.height;
-      // Setup drag on overlay
-      setupCompDrag(oc);
-      // Auto fit and draw
-      autoFitComposite();
-      document.getElementById('comp-hint').textContent = '可拖移 3D 場景來調整位置';
+      document.getElementById('comp-hint').textContent = '場景圖已載入，可拖曳虛擬櫃位自由移動';
+      updateComposite();
     };
     img.src = e.target.result;
   };
@@ -4030,174 +3536,165 @@ function loadSceneBg(input){
   input.value = '';
 }
 
-function setupCompDrag(oc){
-  oc.style.pointerEvents = 'auto';
-  oc.style.cursor = 'move';
-  oc.onmousedown = e => {
-    compDrag = true;
-    compDragStart = {mx: e.offsetX, my: e.offsetY, ox: compState.x, oy: compState.y};
-    oc.style.cursor = 'grabbing';
-    e.preventDefault();
-  };
-  oc.onmousemove = e => {
-    if(!compDrag) return;
-    const dx = e.offsetX - compDragStart.mx;
-    const dy = e.offsetY - compDragStart.my;
-    compState.x = compDragStart.ox + dx;
-    compState.y = compDragStart.oy + dy;
-    // Sync sliders
-    const cvs = document.getElementById('composite-canvas');
-    document.getElementById('comp-x').value = Math.round(compState.x / cvs.width * 200);
-    document.getElementById('lbl-x').textContent = document.getElementById('comp-x').value;
-    document.getElementById('comp-y').value = Math.round(compState.y / cvs.height * 200);
-    document.getElementById('lbl-y').textContent = document.getElementById('comp-y').value;
-    drawComposite();
-  };
-  const stopDrag = () => { compDrag = false; oc.style.cursor = 'move'; };
-  oc.onmouseup = stopDrag;
-  oc.onmouseleave = stopDrag;
-}
-
-// Auto-fit: scale 3D snapshot to fill photo width
-function autoFitComposite(){
-  if(!sceneBgImage || !boothSnapshotImg) return;
-  const cvs = document.getElementById('composite-canvas');
-  if(!cvs.width) return;
-  // Scale so 3D snapshot width matches photo width
-  const scalePx = cvs.width / boothSnapshotImg.naturalWidth;
-  compState.scale = scalePx;
-  compState.x = 0;
-  compState.y = 0;
-  const bh = Math.round(boothSnapshotImg.naturalHeight * scalePx);
-  // Position: vertically center in bottom half (ground plane)
-  compState.y = Math.round((cvs.height - bh) / 2);
-  syncSlidersFromState();
-  drawComposite();
-}
-
-// Align bottom of 3D to bottom of photo
-function autoAlignBottom(){
-  if(!boothSnapshotImg) return;
-  const cvs = document.getElementById('composite-canvas');
-  const bh = Math.round(boothSnapshotImg.naturalHeight * compState.scale);
-  compState.y = cvs.height - bh;
-  syncSlidersFromState();
-  drawComposite();
-}
-
-function autoAlignCenter(){
-  if(!boothSnapshotImg) return;
-  const cvs = document.getElementById('composite-canvas');
-  const bw = Math.round(boothSnapshotImg.naturalWidth  * compState.scale);
-  const bh = Math.round(boothSnapshotImg.naturalHeight * compState.scale);
-  compState.x = Math.round((cvs.width  - bw) / 2);
-  compState.y = Math.round((cvs.height - bh) / 2);
-  syncSlidersFromState();
-  drawComposite();
-}
-
-function syncSlidersFromState(){
-  const cvs = document.getElementById('composite-canvas');
-  const scaleVal = Math.round(compState.scale * boothSnapshotImg.naturalWidth / cvs.width * 100);
-  document.getElementById('comp-scale').value = Math.min(200, Math.max(5, scaleVal));
-  document.getElementById('lbl-scale').textContent = document.getElementById('comp-scale').value + '%';
-  document.getElementById('comp-x').value = Math.round(compState.x / cvs.width * 200);
-  document.getElementById('lbl-x').textContent = document.getElementById('comp-x').value;
-  document.getElementById('comp-y').value = Math.round(compState.y / cvs.height * 200);
-  document.getElementById('lbl-y').textContent = document.getElementById('comp-y').value;
+function getCompositeGeometry(canvas, overlayImg){
+  const st = getCompositeState();
+  const bw = Math.round(canvas.width * st.scaleVal);
+  const bh = Math.round(bw * (overlayImg.naturalHeight / overlayImg.naturalWidth));
+  const bx = Math.round((canvas.width - bw) / 2 + st.xOff * canvas.width / 100);
+  const by = Math.round((canvas.height - bh) / 2 + st.yOff * canvas.height / 100);
+  return {bw, bh, bx, by, opac:st.opac};
 }
 
 function updateComposite(){
-  // Called when sliders change — update compState from sliders
-  if(!sceneBgImage) return;
-  const cvs = document.getElementById('composite-canvas');
-  const scaleSlider = parseInt(document.getElementById('comp-scale').value) / 100;
-  if(boothSnapshotImg){
-    compState.scale = scaleSlider * cvs.width / boothSnapshotImg.naturalWidth;
-  }
-  compState.x = parseInt(document.getElementById('comp-x').value) / 200 * cvs.width;
-  compState.y = parseInt(document.getElementById('comp-y').value) / 200 * cvs.height;
-  compState.opacity = parseInt(document.getElementById('comp-opacity').value) / 100;
-  drawComposite();
-}
+  const compCanvas = document.getElementById('composite-canvas');
+  const ctx = compCanvas.getContext('2d');
+  const handle = document.getElementById('comp-drag-handle');
+  const wrap = document.getElementById('comp-preview-wrap');
 
-function drawComposite(){
-  const cvs = document.getElementById('composite-canvas');
-  const oc  = document.getElementById('comp-overlay-canvas');
-  const ctx = cvs.getContext('2d');
-  const octx = oc.getContext('2d');
+  syncCompositeLabels();
 
-  // Draw background photo
-  if(sceneBgImage){
-    ctx.drawImage(sceneBgImage, 0, 0, cvs.width, cvs.height);
-  } else {
-    ctx.fillStyle = '#222'; ctx.fillRect(0,0,cvs.width,cvs.height);
+  if(!sceneBgImage){
+    compCanvas.width = 600; compCanvas.height = 400;
+    ctx.fillStyle = '#222'; ctx.fillRect(0,0,600,400);
+    ctx.fillStyle = '#888'; ctx.font = '14px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('請上傳現場照片', 300, 200);
+    if(handle) handle.style.display = 'none';
+    return;
   }
 
-  // Draw 3D snapshot on top at current position/scale
-  if(boothSnapshotImg && compState.scale > 0){
-    const bw = Math.round(boothSnapshotImg.naturalWidth  * compState.scale);
-    const bh = Math.round(boothSnapshotImg.naturalHeight * compState.scale);
-    const bx = Math.round(compState.x);
-    const by = Math.round(compState.y);
-    ctx.globalAlpha = compState.opacity;
-    ctx.drawImage(boothSnapshotImg, bx, by, bw, bh);
+  // 預覽 canvas 用螢幕友善尺寸，但保持照片比例
+  const maxW = Math.min(1100, Math.max(600, window.innerWidth - 320));
+  const maxH = Math.min(760, Math.max(420, window.innerHeight - 60));
+  const ratio = Math.min(maxW / sceneBgImage.naturalWidth, maxH / sceneBgImage.naturalHeight, 1);
+  compCanvas.width  = Math.round(sceneBgImage.naturalWidth  * ratio);
+  compCanvas.height = Math.round(sceneBgImage.naturalHeight * ratio);
+  if(wrap){
+    wrap.style.width = compCanvas.width + 'px';
+    wrap.style.height = compCanvas.height + 'px';
+  }
+
+  ctx.clearRect(0,0,compCanvas.width,compCanvas.height);
+  ctx.drawImage(sceneBgImage, 0, 0, compCanvas.width, compCanvas.height);
+
+  const img = boothSnapshotImage;
+  if(img && img.complete && img.naturalWidth){
+    const g = getCompositeGeometry(compCanvas, img);
+    ctx.globalAlpha = g.opac;
+    ctx.drawImage(img, g.bx, g.by, g.bw, g.bh);
     ctx.globalAlpha = 1;
 
-    // Draw drag handle on overlay canvas
-    octx.clearRect(0, 0, oc.width, oc.height);
-    octx.strokeStyle = 'rgba(212,149,106,0.7)';
-    octx.lineWidth = 2;
-    octx.setLineDash([6, 4]);
-    octx.strokeRect(bx+1, by+1, bw-2, bh-2);
-    octx.setLineDash([]);
-    // Corner dots
-    [[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].forEach(([cx,cy])=>{
-      octx.fillStyle = 'rgba(212,149,106,0.9)';
-      octx.beginPath(); octx.arc(cx,cy,5,0,Math.PI*2); octx.fill();
-    });
-    oc.style.width  = cvs.offsetWidth  + 'px';
-    oc.style.height = cvs.offsetHeight + 'px';
+    // 顯示可拖曳框，讓使用者直接拖虛擬櫃位
+    if(handle){
+      handle.style.display = 'block';
+      handle.style.left = g.bx + 'px';
+      handle.style.top = g.by + 'px';
+      handle.style.width = g.bw + 'px';
+      handle.style.height = g.bh + 'px';
+      handle.style.pointerEvents = 'auto';
+      handle.title = '拖曳我可以移動虛擬櫃位';
+    }
+    document.getElementById('comp-hint').textContent = `可拖曳虛擬櫃位移動｜縮放 ${Math.round(getCompositeState().scaleVal*100)}%`;
+  } else {
+    if(handle) handle.style.display = 'none';
   }
+}
+
+function setupCompositeDragEvents(){
+  const handle = document.getElementById('comp-drag-handle');
+  if(!handle || handle.dataset.bound === '1') return;
+  handle.dataset.bound = '1';
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    isCompositeDragging = true;
+    compDragStart = {
+      x: e.clientX,
+      y: e.clientY,
+      compX: parseFloat(document.getElementById('comp-x').value || 0) || 0,
+      compY: parseFloat(document.getElementById('comp-y').value || 0) || 0,
+    };
+    handle.style.cursor = 'grabbing';
+  });
+
+  window.addEventListener('mousemove', e => {
+    if(!isCompositeDragging || !sceneBgImage) return;
+    const canvas = document.getElementById('composite-canvas');
+    const dxPct = (e.clientX - compDragStart.x) / canvas.width * 100;
+    const dyPct = (e.clientY - compDragStart.y) / canvas.height * 100;
+    setCompositeControl('comp-x', Math.max(-200, Math.min(200, Math.round(compDragStart.compX + dxPct))));
+    setCompositeControl('comp-y', Math.max(-200, Math.min(200, Math.round(compDragStart.compY + dyPct))));
+    updateComposite();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if(!isCompositeDragging) return;
+    isCompositeDragging = false;
+    handle.style.cursor = 'move';
+  });
 }
 
 function resetCompositeControls(){
-  document.getElementById('comp-x').value = 0; document.getElementById('lbl-x').textContent = '0';
-  document.getElementById('comp-y').value = 0; document.getElementById('lbl-y').textContent = '0';
-  document.getElementById('comp-scale').value = 80; document.getElementById('lbl-scale').textContent = '80%';
-  document.getElementById('comp-opacity').value = 100; document.getElementById('lbl-opacity').textContent = '100%';
+  setCompositeControl('comp-x', 0);
+  setCompositeControl('comp-y', 0);
+  setCompositeControl('comp-scale', 80);
+  setCompositeControl('comp-opacity', 100);
+  updateComposite();
+}
+
+function autoFitComposite(){
+  // 讓虛擬櫃位寬度接近照片 90%
+  setCompositeControl('comp-scale', 90);
+  setCompositeControl('comp-x', 0);
+  setCompositeControl('comp-y', 0);
+  updateComposite();
+}
+
+function autoAlignBottom(){
+  if(!sceneBgImage || !boothSnapshotImage) return;
+  const canvas = document.getElementById('composite-canvas');
+  const st = getCompositeState();
+  const bw = canvas.width * st.scaleVal;
+  const bh = bw * (boothSnapshotImage.naturalHeight / boothSnapshotImage.naturalWidth);
+  // 讓虛擬櫃位底部落在照片底部上方約 6%
+  const targetBy = canvas.height - bh - canvas.height * 0.06;
+  const yOff = (targetBy - (canvas.height - bh)/2) / canvas.height * 100;
+  setCompositeControl('comp-y', Math.round(Math.max(-200, Math.min(200, yOff))));
+  updateComposite();
+}
+
+function autoAlignCenter(){
+  setCompositeControl('comp-x', 0);
+  setCompositeControl('comp-y', 0);
   updateComposite();
 }
 
 function downloadComposite(){
   if(!sceneBgImage){ alert('請先上傳場景圖'); return; }
-  // Render at full resolution of the photo
-  const out = document.createElement('canvas');
-  out.width  = sceneBgImage.naturalWidth;
-  out.height = sceneBgImage.naturalHeight;
-  const ctx2 = out.getContext('2d');
-  ctx2.drawImage(sceneBgImage, 0, 0);
 
-  if(boothSnapshotImg){
-    // Scale compState from preview canvas coords to full-res coords
-    const previewW = document.getElementById('composite-canvas').width;
-    const previewH = document.getElementById('composite-canvas').height;
-    const rx = out.width  / previewW;
-    const ry = out.height / previewH;
-    const bw = Math.round(boothSnapshotImg.naturalWidth  * compState.scale * rx);
-    const bh = Math.round(boothSnapshotImg.naturalHeight * compState.scale * ry);
-    const bx = Math.round(compState.x * rx);
-    const by = Math.round(compState.y * ry);
-    ctx2.globalAlpha = compState.opacity;
-    ctx2.drawImage(boothSnapshotImg, bx, by, bw, bh);
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width  = sceneBgImage.naturalWidth;
+  outCanvas.height = sceneBgImage.naturalHeight;
+  const ctx2 = outCanvas.getContext('2d');
+
+  ctx2.drawImage(sceneBgImage, 0, 0, outCanvas.width, outCanvas.height);
+
+  const img = boothSnapshotImage;
+  if(img && img.complete && img.naturalWidth){
+    const st = getCompositeState();
+    const bw = Math.round(outCanvas.width * st.scaleVal);
+    const bh = Math.round(bw * (img.naturalHeight / img.naturalWidth));
+    const bx = Math.round((outCanvas.width - bw) / 2 + st.xOff * outCanvas.width / 100);
+    const by = Math.round((outCanvas.height - bh) / 2 + st.yOff * outCanvas.height / 100);
+    ctx2.globalAlpha = st.opac;
+    ctx2.drawImage(img, bx, by, bw, bh);
     ctx2.globalAlpha = 1;
   }
 
   const a = document.createElement('a');
-  a.href = out.toDataURL('image/png');
+  a.href = outCanvas.toDataURL('image/png');
   a.download = '望思甜點_場景合成_' + new Date().toISOString().slice(0,10) + '.png';
   a.click();
-  document.getElementById('comp-hint').textContent = `✓ 已下載（${sceneBgImage.naturalWidth}×${sceneBgImage.naturalHeight}px 原始解析度）`;
 }
 
 // ===================== START =====================
