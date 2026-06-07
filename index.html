@@ -200,7 +200,7 @@
     <div id="canvas-bg-layer"></div>
     <canvas id="three-canvas"></canvas>
     <div id="placing-indicator">點擊場景放置｜ESC 取消</div>
-    <div id="hint-bar">左鍵旋轉｜Shift+拖曳/中鍵拖曳平移虛擬空間｜滾輪縮放</div>
+    <div id="hint-bar">左鍵旋轉｜右鍵平移｜滾輪縮放</div>
     <div id="view-btns">
       <button class="view-btn" onclick="setView('persp')" title="透視視角">3D</button>
       <button class="view-btn" onclick="setView('top')" title="俯視圖">俯</button>
@@ -2089,16 +2089,6 @@ function onMouseDown(e){
   mouseDownPos={x:e.clientX,y:e.clientY};
   pendingPOPSide = null;
 
-  // 平移虛擬空間：Shift + 左鍵拖曳，或滑鼠中鍵拖曳
-  // 這會移動 cameraTarget，讓整個 3D 模擬空間可以對齊實際照片。
-  if((e.button===0 && e.shiftKey) || e.button===1){
-    isPanning = true;
-    isOrbiting = false;
-    panStart = {x:e.clientX, y:e.clientY, cx:cameraTarget.x, cz:cameraTarget.z};
-    wrap.style.cursor = 'grabbing';
-    return;
-  }
-
   if(e.button===0){
     if(isDraggingGizmo) return;
     if(placingItem){
@@ -2429,7 +2419,6 @@ function onMouseUp(e){
   }
   isOrbiting=false;
   isPanning=false;
-  document.getElementById('canvas-wrap').style.cursor = '';
   // Only trigger POP upload if mouse barely moved (clean click, not a drag)
   if(pendingPOPSide && e.button===0){
     const dx = e.clientX - mouseDownPos.x;
@@ -2661,6 +2650,12 @@ let spaceWallTex  = null;
 function showSpaceImport(){
   document.getElementById('space-import-overlay').style.display='flex';
   switchSITab('notion');
+  // 自動載入本地 Notion 快取，避免按鈕沒反應時誤以為無法匯入
+  try{
+    if(typeof loadNotionBooths === 'function') loadNotionBooths();
+  }catch(e){
+    console.warn('loadNotionBooths failed:', e);
+  }
 }
 function closeSpaceImport(){
   document.getElementById('space-import-overlay').style.display='none';
@@ -2922,53 +2917,95 @@ function loadSpacePhoto(input){
 }
 
 async function analyzeSpaceWithAI(dataUrl){
-  const base64 = dataUrl.split(',')[1];
-  const mediaType = dataUrl.split(';')[0].split(':')[1];
+  // GitHub Pages 是純前端靜態網站，不能直接呼叫 Anthropic / Claude API。
+  // 原本直接 fetch('https://api.anthropic.com/v1/messages') 會被瀏覽器 CORS 擋掉，
+  // 導致「上傳空間」看起來失敗。這裡改成本機估算版本：
+  // 1. 照片一定可以先顯示成背景
+  // 2. 自動帶入合理尺寸
+  // 3. 使用者可手動修改尺寸後套用
+  // 若未來要真正 AI 分析，請改用 Vercel / Netlify / Cloudflare Worker 做後端代理。
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 600,
-        messages: [{
-          role: 'user',
-          content: [
-            {type:'image', source:{type:'base64', media_type:mediaType, data:base64}},
-            {type:'text', text:`分析這張室內空間照片，估算空間的實際尺寸。
-請以 JSON 格式回傳，不要有任何其他文字：
-{
-  "width": 空間寬度cm整數,
-  "depth": 空間深度cm整數,
-  "height": 天花板高度cm整數,
-  "desc": "一句話描述這個空間（中文，20字以內）",
-  "confidence": "high|medium|low"
-}
-如果無法判斷請給合理預設值（width:300, depth:300, height:280）。`}
-          ]
-        }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content?.[0]?.text || '';
-    const clean = text.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(clean);
-    document.getElementById('space-w').value = parsed.width || 300;
-    document.getElementById('space-d').value = parsed.depth || 300;
-    document.getElementById('space-h').value = parsed.height || 280;
-    document.getElementById('space-ai-desc').textContent =
-      `AI 估算：${parsed.desc || '室內空間'} | 信心度：${{high:'高',medium:'中',low:'低'}[parsed.confidence]||'中'}`;
-    document.getElementById('space-ai-status').style.display='none';
-    document.getElementById('space-dims-form').style.display='block';
+    const img = new Image();
+    img.onload = () => {
+      const ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
+
+      let estimatedW = 300;
+      let estimatedD = 300;
+      let estimatedH = 280;
+
+      // 用照片比例做保守估算，避免沒有 AI 時完全卡住
+      if(ratio >= 1.6){
+        estimatedW = 600;
+        estimatedD = 300;
+      } else if(ratio >= 1.25){
+        estimatedW = 450;
+        estimatedD = 300;
+      } else if(ratio <= 0.85){
+        estimatedW = 300;
+        estimatedD = 450;
+      }
+
+      spaceAIData = {
+        booth_w: estimatedW,
+        booth_d: estimatedD,
+        room_h: estimatedH,
+        floor_color: "#f0ece8",
+        wall_color: "#e8e4de",
+        has_escalator: false,
+        has_slanted_ceiling: false,
+        has_arch_door: false,
+        has_digital_screen: false,
+        has_pillar: false,
+        left_wall: "open",
+        right_wall: "open",
+        floor_pattern: "plain",
+        diamond_tile: false,
+        lighting: "mixed",
+        desc: "已匯入現場照片",
+        features: [
+          "照片已成功套用為背景",
+          "已使用本機估算尺寸",
+          "可手動調整寬度、深度與高度"
+        ]
+      };
+
+      document.getElementById('space-w').value = estimatedW;
+      document.getElementById('space-d').value = estimatedD;
+      document.getElementById('space-h').value = estimatedH;
+      document.getElementById('space-ai-desc').textContent =
+        "照片已匯入。GitHub Pages 無法直接執行雲端 AI 分析，已先用本機模式估算尺寸，可手動修改後套用。";
+
+      document.getElementById('space-features-wrap').style.display = 'block';
+      document.getElementById('space-features').innerHTML =
+        spaceAIData.features.map(f => `✓ ${f}`).join('<br>');
+
+      document.getElementById('space-ai-status').style.display = 'none';
+      document.getElementById('space-dims-form').style.display = 'flex';
+    };
+
+    img.onerror = () => {
+      document.getElementById('space-ai-msg').textContent = '照片讀取失敗，請換一張圖片';
+      const sp = document.getElementById('space-ai-status')?.querySelector('.spinner');
+      if(sp) sp.style.display = 'none';
+      document.getElementById('space-w').value = 300;
+      document.getElementById('space-d').value = 300;
+      document.getElementById('space-h').value = 280;
+      document.getElementById('space-dims-form').style.display = 'flex';
+    };
+
+    img.src = dataUrl;
   } catch(err) {
-    document.getElementById('space-ai-msg').textContent = '分析失敗，請手動輸入尺寸';
-    document.getElementById('space-ai-status').querySelector('.spinner').style.display='none';
+    console.warn('Local space analysis fallback failed:', err);
+    document.getElementById('space-ai-msg').textContent = '已切換手動模式，請輸入尺寸';
+    const sp = document.getElementById('space-ai-status')?.querySelector('.spinner');
+    if(sp) sp.style.display = 'none';
     document.getElementById('space-w').value = 300;
     document.getElementById('space-d').value = 300;
     document.getElementById('space-h').value = 280;
-    document.getElementById('space-dims-form').style.display='block';
+    document.getElementById('space-dims-form').style.display = 'flex';
   }
 }
+
 
 function applySpaceImport(){
   const w = parseInt(document.getElementById('space-w').value)||300;
@@ -3462,62 +3499,17 @@ function startPlacingAI(item){
 // ===================== SCENE COMPOSITE =====================
 let sceneBgImage = null;
 let boothSnapshotDataURL = null;
-let boothSnapshotImage = null;
-let isCompositeDragging = false;
-let compDragStart = {x:0, y:0, compX:0, compY:0};
-
-function getCompositeState(){
-  return {
-    scaleVal: (parseFloat(document.getElementById('comp-scale')?.value || 80) || 80) / 100,
-    xOff: parseFloat(document.getElementById('comp-x')?.value || 0) || 0,
-    yOff: parseFloat(document.getElementById('comp-y')?.value || 0) || 0,
-    opac: (parseFloat(document.getElementById('comp-opacity')?.value || 100) || 100) / 100,
-  };
-}
-
-function setCompositeControl(id, value){
-  const el = document.getElementById(id);
-  if(el) el.value = value;
-}
-
-function syncCompositeLabels(){
-  const scale = document.getElementById('comp-scale')?.value || 80;
-  const x = document.getElementById('comp-x')?.value || 0;
-  const y = document.getElementById('comp-y')?.value || 0;
-  const opacity = document.getElementById('comp-opacity')?.value || 100;
-  const lblScale = document.getElementById('lbl-scale'); if(lblScale) lblScale.textContent = scale + '%';
-  const lblX = document.getElementById('lbl-x'); if(lblX) lblX.textContent = x;
-  const lblY = document.getElementById('lbl-y'); if(lblY) lblY.textContent = y;
-  const lblOpacity = document.getElementById('lbl-opacity'); if(lblOpacity) lblOpacity.textContent = opacity + '%';
-}
 
 function showComposite(){
-  // 匯出目前 3D 視角作為透明櫃位圖
-  const oldBg = scene.background;
-  const oldFog = scene.fog;
-  const oldClearAlpha = renderer.getClearAlpha ? renderer.getClearAlpha() : 1;
-  scene.background = null;
-  scene.fog = null;
-  renderer.setClearColor(0x000000, 0);
+  // Take a fresh snapshot of current 3D scene
   renderer.render(scene, camera);
   boothSnapshotDataURL = renderer.domElement.toDataURL('image/png');
-  scene.background = oldBg;
-  scene.fog = oldFog;
-  renderer.setClearColor(0x1a1410, oldClearAlpha);
-
-  boothSnapshotImage = new Image();
-  boothSnapshotImage.onload = () => updateComposite();
-  boothSnapshotImage.src = boothSnapshotDataURL;
-
   document.getElementById('composite-overlay').style.display = 'flex';
-  setupCompositeDragEvents();
-  syncCompositeLabels();
   updateComposite();
 }
 
 function closeComposite(){
   document.getElementById('composite-overlay').style.display = 'none';
-  isCompositeDragging = false;
 }
 
 function loadSceneBg(input){
@@ -3527,7 +3519,7 @@ function loadSceneBg(input){
     const img = new Image();
     img.onload = () => {
       sceneBgImage = img;
-      document.getElementById('comp-hint').textContent = '場景圖已載入，可拖曳虛擬櫃位自由移動';
+      document.getElementById('comp-hint').textContent = '場景圖已載入，可調整位置與縮放';
       updateComposite();
     };
     img.src = e.target.result;
@@ -3536,165 +3528,93 @@ function loadSceneBg(input){
   input.value = '';
 }
 
-function getCompositeGeometry(canvas, overlayImg){
-  const st = getCompositeState();
-  const bw = Math.round(canvas.width * st.scaleVal);
-  const bh = Math.round(bw * (overlayImg.naturalHeight / overlayImg.naturalWidth));
-  const bx = Math.round((canvas.width - bw) / 2 + st.xOff * canvas.width / 100);
-  const by = Math.round((canvas.height - bh) / 2 + st.yOff * canvas.height / 100);
-  return {bw, bh, bx, by, opac:st.opac};
-}
-
 function updateComposite(){
   const compCanvas = document.getElementById('composite-canvas');
   const ctx = compCanvas.getContext('2d');
-  const handle = document.getElementById('comp-drag-handle');
-  const wrap = document.getElementById('comp-preview-wrap');
-
-  syncCompositeLabels();
 
   if(!sceneBgImage){
     compCanvas.width = 600; compCanvas.height = 400;
     ctx.fillStyle = '#222'; ctx.fillRect(0,0,600,400);
-    ctx.fillStyle = '#888'; ctx.font = '14px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('請上傳現場照片', 300, 200);
-    if(handle) handle.style.display = 'none';
+    ctx.fillStyle = '#666'; ctx.font = '14px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('請上傳場景圖', 300, 200);
     return;
   }
 
-  // 預覽 canvas 用螢幕友善尺寸，但保持照片比例
-  const maxW = Math.min(1100, Math.max(600, window.innerWidth - 320));
-  const maxH = Math.min(760, Math.max(420, window.innerHeight - 60));
-  const ratio = Math.min(maxW / sceneBgImage.naturalWidth, maxH / sceneBgImage.naturalHeight, 1);
+  // Set canvas to bg image native size (capped for preview)
+  const maxW = 600, maxH = 400;
+  const ratio = Math.min(maxW / sceneBgImage.naturalWidth, maxH / sceneBgImage.naturalHeight);
   compCanvas.width  = Math.round(sceneBgImage.naturalWidth  * ratio);
   compCanvas.height = Math.round(sceneBgImage.naturalHeight * ratio);
-  if(wrap){
-    wrap.style.width = compCanvas.width + 'px';
-    wrap.style.height = compCanvas.height + 'px';
-  }
 
-  ctx.clearRect(0,0,compCanvas.width,compCanvas.height);
+  // Draw background
   ctx.drawImage(sceneBgImage, 0, 0, compCanvas.width, compCanvas.height);
 
-  const img = boothSnapshotImage;
-  if(img && img.complete && img.naturalWidth){
-    const g = getCompositeGeometry(compCanvas, img);
-    ctx.globalAlpha = g.opac;
-    ctx.drawImage(img, g.bx, g.by, g.bw, g.bh);
-    ctx.globalAlpha = 1;
+  // Draw booth snapshot on top
+  if(boothSnapshotDataURL){
+    const bImg = new Image();
+    bImg.onload = () => {
+      const scaleVal = parseInt(document.getElementById('comp-scale').value) / 100;
+      const xOff = parseInt(document.getElementById('comp-x').value);
+      const yOff = parseInt(document.getElementById('comp-y').value);
+      const opac = parseInt(document.getElementById('comp-opacity').value) / 100;
 
-    // 顯示可拖曳框，讓使用者直接拖虛擬櫃位
-    if(handle){
-      handle.style.display = 'block';
-      handle.style.left = g.bx + 'px';
-      handle.style.top = g.by + 'px';
-      handle.style.width = g.bw + 'px';
-      handle.style.height = g.bh + 'px';
-      handle.style.pointerEvents = 'auto';
-      handle.title = '拖曳我可以移動虛擬櫃位';
-    }
-    document.getElementById('comp-hint').textContent = `可拖曳虛擬櫃位移動｜縮放 ${Math.round(getCompositeState().scaleVal*100)}%`;
-  } else {
-    if(handle) handle.style.display = 'none';
-  }
-}
+      const bw = Math.round(compCanvas.width * scaleVal);
+      const bh = Math.round(bw * (bImg.naturalHeight / bImg.naturalWidth));
+      const bx = Math.round((compCanvas.width - bw) / 2 + xOff * compCanvas.width / 100);
+      const by = Math.round((compCanvas.height - bh) / 2 + yOff * compCanvas.height / 100);
 
-function setupCompositeDragEvents(){
-  const handle = document.getElementById('comp-drag-handle');
-  if(!handle || handle.dataset.bound === '1') return;
-  handle.dataset.bound = '1';
-
-  handle.addEventListener('mousedown', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    isCompositeDragging = true;
-    compDragStart = {
-      x: e.clientX,
-      y: e.clientY,
-      compX: parseFloat(document.getElementById('comp-x').value || 0) || 0,
-      compY: parseFloat(document.getElementById('comp-y').value || 0) || 0,
+      ctx.globalAlpha = opac;
+      ctx.drawImage(bImg, bx, by, bw, bh);
+      ctx.globalAlpha = 1;
+      document.getElementById('comp-hint').textContent = `合成預覽（縮放 ${Math.round(scaleVal*100)}%）`;
     };
-    handle.style.cursor = 'grabbing';
-  });
-
-  window.addEventListener('mousemove', e => {
-    if(!isCompositeDragging || !sceneBgImage) return;
-    const canvas = document.getElementById('composite-canvas');
-    const dxPct = (e.clientX - compDragStart.x) / canvas.width * 100;
-    const dyPct = (e.clientY - compDragStart.y) / canvas.height * 100;
-    setCompositeControl('comp-x', Math.max(-200, Math.min(200, Math.round(compDragStart.compX + dxPct))));
-    setCompositeControl('comp-y', Math.max(-200, Math.min(200, Math.round(compDragStart.compY + dyPct))));
-    updateComposite();
-  });
-
-  window.addEventListener('mouseup', () => {
-    if(!isCompositeDragging) return;
-    isCompositeDragging = false;
-    handle.style.cursor = 'move';
-  });
+    bImg.src = boothSnapshotDataURL;
+  }
 }
 
 function resetCompositeControls(){
-  setCompositeControl('comp-x', 0);
-  setCompositeControl('comp-y', 0);
-  setCompositeControl('comp-scale', 80);
-  setCompositeControl('comp-opacity', 100);
-  updateComposite();
-}
-
-function autoFitComposite(){
-  // 讓虛擬櫃位寬度接近照片 90%
-  setCompositeControl('comp-scale', 90);
-  setCompositeControl('comp-x', 0);
-  setCompositeControl('comp-y', 0);
-  updateComposite();
-}
-
-function autoAlignBottom(){
-  if(!sceneBgImage || !boothSnapshotImage) return;
-  const canvas = document.getElementById('composite-canvas');
-  const st = getCompositeState();
-  const bw = canvas.width * st.scaleVal;
-  const bh = bw * (boothSnapshotImage.naturalHeight / boothSnapshotImage.naturalWidth);
-  // 讓虛擬櫃位底部落在照片底部上方約 6%
-  const targetBy = canvas.height - bh - canvas.height * 0.06;
-  const yOff = (targetBy - (canvas.height - bh)/2) / canvas.height * 100;
-  setCompositeControl('comp-y', Math.round(Math.max(-200, Math.min(200, yOff))));
-  updateComposite();
-}
-
-function autoAlignCenter(){
-  setCompositeControl('comp-x', 0);
-  setCompositeControl('comp-y', 0);
+  document.getElementById('comp-x').value = 0;
+  document.getElementById('comp-y').value = 0;
+  document.getElementById('comp-scale').value = 80;
+  document.getElementById('comp-opacity').value = 100;
   updateComposite();
 }
 
 function downloadComposite(){
   if(!sceneBgImage){ alert('請先上傳場景圖'); return; }
 
+  // Render at full bg resolution
   const outCanvas = document.createElement('canvas');
   outCanvas.width  = sceneBgImage.naturalWidth;
   outCanvas.height = sceneBgImage.naturalHeight;
   const ctx2 = outCanvas.getContext('2d');
 
-  ctx2.drawImage(sceneBgImage, 0, 0, outCanvas.width, outCanvas.height);
+  ctx2.drawImage(sceneBgImage, 0, 0);
 
-  const img = boothSnapshotImage;
-  if(img && img.complete && img.naturalWidth){
-    const st = getCompositeState();
-    const bw = Math.round(outCanvas.width * st.scaleVal);
-    const bh = Math.round(bw * (img.naturalHeight / img.naturalWidth));
-    const bx = Math.round((outCanvas.width - bw) / 2 + st.xOff * outCanvas.width / 100);
-    const by = Math.round((outCanvas.height - bh) / 2 + st.yOff * outCanvas.height / 100);
-    ctx2.globalAlpha = st.opac;
-    ctx2.drawImage(img, bx, by, bw, bh);
-    ctx2.globalAlpha = 1;
+  if(boothSnapshotDataURL){
+    const bImg = new Image();
+    bImg.onload = () => {
+      const scaleVal = parseInt(document.getElementById('comp-scale').value) / 100;
+      const xOff = parseInt(document.getElementById('comp-x').value);
+      const yOff = parseInt(document.getElementById('comp-y').value);
+      const opac = parseInt(document.getElementById('comp-opacity').value) / 100;
+
+      const bw = Math.round(outCanvas.width * scaleVal);
+      const bh = Math.round(bw * (bImg.naturalHeight / bImg.naturalWidth));
+      const bx = Math.round((outCanvas.width - bw) / 2 + xOff * outCanvas.width / 100);
+      const by = Math.round((outCanvas.height - bh) / 2 + yOff * outCanvas.height / 100);
+
+      ctx2.globalAlpha = opac;
+      ctx2.drawImage(bImg, bx, by, bw, bh);
+      ctx2.globalAlpha = 1;
+
+      const a = document.createElement('a');
+      a.href = outCanvas.toDataURL('image/png');
+      a.download = '望思甜點_場景合成_' + new Date().toISOString().slice(0,10) + '.png';
+      a.click();
+    };
+    bImg.src = boothSnapshotDataURL;
   }
-
-  const a = document.createElement('a');
-  a.href = outCanvas.toDataURL('image/png');
-  a.download = '望思甜點_場景合成_' + new Date().toISOString().slice(0,10) + '.png';
-  a.click();
 }
 
 // ===================== START =====================
