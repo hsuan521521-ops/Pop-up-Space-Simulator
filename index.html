@@ -2895,7 +2895,7 @@ function applyNotionBooth(){
 function forceShowSpacePhoto(dataUrl){
   if(!dataUrl) return;
 
-  // 1) 真正的 img 背景層：最穩定，不依賴 background-image
+  // 真實照片背景層：放在 Three.js canvas 後面
   let imgLayer = document.getElementById('canvas-bg-img');
   const wrap = document.getElementById('canvas-wrap');
   if(!imgLayer && wrap){
@@ -2913,7 +2913,7 @@ function forceShowSpacePhoto(dataUrl){
     imgLayer.style.zIndex = '0';
   }
 
-  // 2) 同時保留 CSS background-image 作為備援
+  // CSS background 備援
   const bg = document.getElementById('canvas-bg-layer');
   if(bg){
     bg.style.display = 'block';
@@ -2926,14 +2926,14 @@ function forceShowSpacePhoto(dataUrl){
     bg.style.pointerEvents = 'none';
   }
 
-  // 3) canvas 必須透明並在背景上方
+  // canvas 透明，讓照片在後方可見
   const canvas = document.getElementById('three-canvas');
   if(canvas){
     canvas.style.background = 'transparent';
     canvas.style.zIndex = '1';
+    canvas.style.position = 'relative';
   }
 
-  // 4) Three.js 透明背景
   if(scene){
     scene.background = null;
     scene.fog = null;
@@ -2942,30 +2942,58 @@ function forceShowSpacePhoto(dataUrl){
     renderer.setClearColor(0x000000, 0);
   }
 
-  // 5) 牆面 / 地板透明，不要遮住照片
+  // ✅ 保留虛擬空間，不再整個隱藏
+  // 地板、牆面改成半透明，讓「實際照片 + 虛擬空間」同時看得到。
   if(floorMesh){
+    floorMesh.visible = true;
     floorMesh.material = new THREE.MeshBasicMaterial({
       color:0xffffff,
       transparent:true,
-      opacity:0.0,
+      opacity:0.10,
       depthWrite:false
     });
-    floorMesh.visible = false;
   }
   if(wallBack){
-    wallBack.material = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, depthWrite:false});
-    wallBack.visible = false;
+    wallBack.visible = true;
+    wallBack.material = new THREE.MeshBasicMaterial({
+      color:0xffffff,
+      transparent:true,
+      opacity:0.05,
+      depthWrite:false
+    });
   }
   if(wallLeft){
-    wallLeft.material = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, depthWrite:false});
-    wallLeft.visible = false;
+    wallLeft.visible = true;
+    wallLeft.material = new THREE.MeshBasicMaterial({
+      color:0xffffff,
+      transparent:true,
+      opacity:0.04,
+      depthWrite:false
+    });
   }
   if(wallRight){
-    wallRight.material = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, depthWrite:false});
-    wallRight.visible = false;
+    wallRight.visible = true;
+    wallRight.material = new THREE.MeshBasicMaterial({
+      color:0xffffff,
+      transparent:true,
+      opacity:0.04,
+      depthWrite:false
+    });
   }
-  if(gridHelper) gridHelper.visible = false;
-  if(labelMesh) labelMesh.visible = false;
+
+  if(gridHelper){
+    gridHelper.visible = true;
+    gridHelper.material.transparent = true;
+    gridHelper.material.opacity = 0.28;
+  }
+  if(labelMesh){
+    labelMesh.visible = true;
+  }
+
+  // 確保所有已放置物件都顯示
+  objects.forEach(o=>{
+    if(o.mesh) o.mesh.visible = true;
+  });
 
   spaceBgMode = '2d';
   spaceBgVisible = true;
@@ -2981,6 +3009,7 @@ function forceShowSpacePhoto(dataUrl){
 
   if(renderer && scene && camera) renderer.render(scene, camera);
 }
+
 
 function getBgLayer(){ return document.getElementById('canvas-bg-layer'); }
 function generateBoothSceneBg(booth, bw, bd){
@@ -3296,43 +3325,95 @@ function toggleSpaceBg(){
   const img = document.getElementById('canvas-bg-img');
 
   if(spaceBgVisible){
-    if(bg) bg.style.display = 'block';
-    if(img) img.style.display = 'block';
-    scene.background = null;
-    scene.fog = null;
-    renderer.setClearColor(0x000000, 0);
+    if(spacePhotoDataUrl){
+      forceShowSpacePhoto(spacePhotoDataUrl);
+    }else{
+      if(bg) bg.style.display = 'block';
+      if(img) img.style.display = 'block';
+      scene.background = null;
+      scene.fog = null;
+      renderer.setClearColor(0x000000, 0);
+    }
     document.getElementById('btn-bg-toggle').textContent = '👁 隱藏背景';
   }else{
     if(bg) bg.style.display = 'none';
     if(img) img.style.display = 'none';
+
+    // 恢復正常 3D 虛擬空間
     scene.background = new THREE.Color(0x1a1410);
+    scene.fog = new THREE.Fog(0x1a1410, 200, 400);
     renderer.setClearColor(0x1a1410, 1);
+
+    if(floorMesh){
+      floorMesh.visible = true;
+      floorMesh.material = new THREE.MeshLambertMaterial({color: new THREE.Color(floorColor)});
+    }
+    if(wallBack){
+      wallBack.visible = true;
+      wallBack.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+    }
+    if(wallLeft){
+      wallLeft.visible = true;
+      wallLeft.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+    }
+    if(wallRight){
+      wallRight.visible = true;
+      wallRight.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+    }
+    if(gridHelper) gridHelper.visible = true;
+    if(labelMesh) labelMesh.visible = true;
+
     document.getElementById('btn-bg-toggle').textContent = '👁 顯示背景';
   }
 }
 
 
+
 function toggleBgMode(){
-  const canvas = document.getElementById('canvas-wrap');
   if(spaceBgMode === '3d'){
-    // Switch to 2D
+    // Switch to 2D photo overlay
     spaceBgMode = '2d';
-    // Remove 3D wall texture
-    if(wallBack) wallBack.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
-    // Apply 2D
-    getBgLayer().style.backgroundImage = spaceBgVisible ? `url(${spacePhotoDataUrl})` : 'none';
+    if(spacePhotoDataUrl && spaceBgVisible){
+      forceShowSpacePhoto(spacePhotoDataUrl);
+    }
     renderer.setClearColor(0x000000, 0);
   } else {
-    // Switch to 3D
+    // Switch to normal 3D view
     spaceBgMode = '3d';
-    getBgLayer().style.backgroundImage = 'none';
+    const bg = getBgLayer();
+    const img = document.getElementById('canvas-bg-img');
+    if(bg) bg.style.display = 'none';
+    if(img) img.style.display = 'none';
+
+    scene.background = new THREE.Color(0x1a1410);
+    scene.fog = new THREE.Fog(0x1a1410, 200, 400);
     renderer.setClearColor(0x1a1410, 1);
-    if(wallBack && spaceWallTex && spaceBgVisible){
-      wallBack.material = new THREE.MeshLambertMaterial({map: spaceWallTex});
+
+    if(floorMesh){
+      floorMesh.visible = true;
+      floorMesh.material = new THREE.MeshLambertMaterial({color: new THREE.Color(floorColor)});
     }
+    if(wallBack){
+      wallBack.visible = true;
+      wallBack.material = spaceWallTex && spaceBgVisible
+        ? new THREE.MeshLambertMaterial({map: spaceWallTex})
+        : new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+    }
+    if(wallLeft){
+      wallLeft.visible = true;
+      wallLeft.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+    }
+    if(wallRight){
+      wallRight.visible = true;
+      wallRight.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
+    }
+    if(gridHelper) gridHelper.visible = true;
+    if(labelMesh) labelMesh.visible = true;
   }
   updateBgModeBtn();
 }
+
+
 
 function updateBgModeBtn(){
   const btn = document.getElementById('btn-bg-mode');
