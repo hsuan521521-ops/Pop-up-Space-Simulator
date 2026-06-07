@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v9.1</title>
+<title>自製空間模擬系統 Pro v9.2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -144,9 +144,6 @@
   .modal-btns button{flex:1;padding:8px;border-radius:6px;font-size:13px;font-family:'Noto Sans TC',sans-serif;cursor:pointer;}
   .btn-cancel{background:transparent;border:1px solid var(--border);color:var(--text2);}
   .btn-ok{background:var(--accent);border:1px solid var(--accent);color:#1a1410;font-weight:500;}
-
-  .escalator-template-badge{display:inline-block;font-size:9px;background:#2f6fd6;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px;}
-
 </style>
 </head>
 <body>
@@ -327,7 +324,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯包覆背板：正面＝斜切主背板；左/右側＝側面垂直板；底部已含 81cm / 69.4cm 內縮</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：正面＝中板，左側＝左折板，右側＝右折板；這是3D立體折板，不是平面</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -869,14 +866,14 @@ const ITEMS = [
   {id:'shelf_wall_1',  cat:'shelving', name:'壁掛層板',         icon:'📐', w:100, d:25,  h:20,  cost:0, shape:'shelf_wall',  color:'#c8a87a', isDefault:true},
 
   // 背板
-  {id:'backwall_escalator_wrap_center', cat:'backwall', name:'手扶梯下方包覆背板 中', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_precise_center', color:'#f0ece6',
-   spec:{size:'W1 150×D1 60×H 220 cm / H1 81 / D2 69.4', note:'依手扶梯下方斜面製作：主面為斜板，側面為垂直板，可上傳主面與側面圖'}},
-  {id:'backwall_escalator_wrap_left', cat:'backwall', name:'手扶梯下方包覆背板 左', icon:'↰', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_precise_left', color:'#f0ece6',
-   spec:{size:'W1 150×D1 60×H 220 cm / H1 81 / D2 69.4', note:'左向包覆版本，適合左側手扶梯/斜面'}},
-  {id:'backwall_escalator_wrap_right', cat:'backwall', name:'手扶梯下方包覆背板 右', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_precise_right', color:'#f0ece6',
-   spec:{size:'W1 150×D1 60×H 220 cm / H1 81 / D2 69.4', note:'右向包覆版本，適合右側手扶梯/斜面'}},
+  {id:'backwall_escalator_under_T_3d', cat:'backwall', name:'手扶梯下背板 T型 立體', icon:'▰', w:176, d:199, h:223, cost:0, shape:'escalator_under_T_3d', color:'#f0ece6',
+   spec:{size:'中板176×223cm＋左右折板199×223cm，側邊低點116cm，上斜段22cm，厚度5mm', note:'真正3D折板，非平面；可上傳中板/左折板/右折板圖片'}},
+  {id:'backwall_escalator_under_A_3d', cat:'backwall', name:'手扶梯下背板 A型 立體', icon:'⌂', w:176, d:199, h:223, cost:0, shape:'escalator_under_A_3d', color:'#f0ece6',
+   spec:{size:'中板176×223cm＋左右折板199×223cm，雙側斜頂，厚度5mm', note:'適合手扶梯下方雙斜面視覺背板'}},
+  {id:'backwall_escalator_under_U_3d', cat:'backwall', name:'手扶梯下背板 U型 立體', icon:'凵', w:176, d:199, h:223, cost:0, shape:'escalator_under_U_3d', color:'#f0ece6',
+   spec:{size:'中板176×223cm＋左右折板199×223cm，U型三面包覆，厚度5mm', note:'三面包覆版本，可做內凹式背板'}},
   {id:'bw_full',    cat:'backwall', name:'全版背板',       icon:'🖼', w:300, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
-  {id:'bw_escalator_wrap', cat:'backwall', name:'手扶梯下方包覆背板 雙面', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_backwall', color:'#f0ece6',
+  {id:'bw_escalator_wrap', cat:'backwall', name:'手扶梯下方包覆背板 舊版雙面', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_backwall', color:'#f0ece6',
    spec:{size:'主面150×220cm＋側面60×220cm', note:'適合包覆手扶梯下方斜面/轉角位置，可上傳兩面輸出圖'}},
 
   {id:'bw_half',    cat:'backwall', name:'半版背板',        icon:'🖼', w:150, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
@@ -1114,7 +1111,7 @@ function findExistingPOPSide(group, side){
 function ensureFourSidePOP(group, item, w, d, h){
   const allowedCats = ['cake_fridge','chest_freezer','upright_fridge','steeltable','shelving','backwall','other'];
   if(!item || !allowedCats.includes(item.cat)) return;
-  if(item.shape && item.shape.indexOf('escalator_wrap_precise') === 0) return;
+  if(item.shape && item.shape.indexOf('escalator_under_') === 0) return;
 
   const eps = 0.9 * U;
   const faceH = Math.max(h * 0.96, 8 * U);
@@ -1162,132 +1159,183 @@ function ensureFourSidePOP(group, item, w, d, h){
 
 
 
-function makeVerticalShapeMesh(points, depth, material){
+function makePanelShapeGeometryFromPoints(points, thickness){
   const shape = new THREE.Shape();
   shape.moveTo(points[0][0], points[0][1]);
   for(let i=1;i<points.length;i++) shape.lineTo(points[i][0], points[i][1]);
   shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, {depth: depth, bevelEnabled:false});
-  geo.center();
-  const mesh = new THREE.Mesh(geo, material);
-  return mesh;
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: thickness,
+    bevelEnabled: false,
+    curveSegments: 1
+  });
+  // 讓厚度中心落在 z=0，方便旋轉折板
+  geo.translate(0, 0, -thickness/2);
+  return geo;
 }
 
-function makeVerticalShapePOP(points, material){
+function addPanelWithPOP(group, cfg){
+  const {
+    name, side, points, thickness, material,
+    position = new THREE.Vector3(),
+    rotationY = 0,
+    popOffset = 0.9 * U
+  } = cfg;
+
+  const geo = makePanelShapeGeometryFromPoints(points, thickness);
+  const panel = new THREE.Mesh(geo, material);
+  panel.position.copy(position);
+  panel.rotation.y = rotationY;
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  panel.userData.panelName = name;
+  group.add(panel);
+
   const shape = new THREE.Shape();
   shape.moveTo(points[0][0], points[0][1]);
   for(let i=1;i<points.length;i++) shape.lineTo(points[i][0], points[i][1]);
   shape.closePath();
-  const geo = new THREE.ShapeGeometry(shape);
-  geo.center();
-  const mesh = new THREE.Mesh(geo, material);
-  return mesh;
+  const popGeo = new THREE.ShapeGeometry(shape);
+  const pop = new THREE.Mesh(popGeo, makeBlankPOPMaterial());
+  pop.position.copy(position);
+  pop.rotation.y = rotationY;
+  // 沿著該片板的正面法線推出，避免 z fighting
+  const nx = Math.sin(rotationY);
+  const nz = Math.cos(rotationY);
+  pop.position.x += nx * (thickness/2 + popOffset);
+  pop.position.z += nz * (thickness/2 + popOffset);
+  pop.userData.isPOP = true;
+  pop.userData.popSide = side;
+  pop.userData.panelName = name;
+  pop.renderOrder = 50;
+  group.add(pop);
+
+  group.userData['pop' + side.charAt(0).toUpperCase() + side.slice(1)] = pop;
+  if(side === 'front') group.userData.popMesh = pop;
+  return {panel, pop};
 }
 
-function buildPreciseEscalatorWrapBackwall(group, item, color, variant){
-  // 依照使用者提供的 SketchUp 圖：主面150、高220、側深60、底部內縮高81、內縮深69.4
-  const W1 = (item.w || 150) * U;
-  const D1 = (item.d || 60) * U;
-  const H  = (item.h || 220) * U;
-  const H1 = (item.innerH || item.baseInsetH || 81) * U;
-  const D2 = (item.innerD || item.baseInsetD || 69.4) * U;
-  const T  = 5 * U;
+function buildReal3DEscalatorUnderBackwall(group, item, color, variant){
+  // 依照使用者提供的施工圖：
+  // 中板 176×223cm
+  // 左右折板 199×223cm
+  // 兩側低點 116cm
+  // 上方短直段 22cm
+  // 材質厚度以 5mm 板視覺化，系統中至少給 1cm 可見厚度
+  const centerW = (item.centerW || item.w || 176) * U;
+  const sideW   = (item.sideW || item.d || 199) * U;
+  const H       = (item.h || 223) * U;
+  const lowH    = (item.lowH || 116) * U;
+  const topFlat = (item.topFlat || 22) * U;
+  const T       = Math.max((item.thickness || 1) * U, 0.7 * U);
+  const foldAngle = (item.foldAngle || 92) * Math.PI / 180;
 
   const boardMat = new THREE.MeshLambertMaterial({color:new THREE.Color(color)});
   const edgeMat  = new THREE.MeshLambertMaterial({color:0x222222});
 
-  const isLeft = variant === 'left';
-  const isRight = variant === 'right';
-
-  // 主面是斜切五邊形：左下 → 右下 → 右上 → 左上內縮 → 左側底部內縮點
-  // 這樣視覺會更接近手扶梯下方的斜面包覆板，而不是普通矩形。
-  const cutX = W1 * 0.22;
-  const mainPts = [
-    [-W1/2, 0],
-    [ W1/2, 0],
-    [ W1/2, H],
-    [-W1/2 + cutX, H],
-    [-W1/2, H1]
+  // 中央板：完整矩形
+  const centerPts = [
+    [-centerW/2, 0],
+    [ centerW/2, 0],
+    [ centerW/2, H],
+    [-centerW/2, H]
   ];
 
-  const main = makeVerticalShapeMesh(mainPts, T, boardMat);
-  main.position.set(0, H/2, 0);
-  main.castShadow = true;
-  main.receiveShadow = true;
-  group.add(main);
+  addPanelWithPOP(group, {
+    name:'中央主背板',
+    side:'front',
+    points:centerPts,
+    thickness:T,
+    material:boardMat,
+    position:new THREE.Vector3(0,0,0),
+    rotationY:0
+  });
 
-  // 主面可貼圖面，同樣做成五邊形，不會再變成普通方形。
-  const popMain = makeVerticalShapePOP(mainPts, makeBlankPOPMaterial());
-  popMain.position.set(0, H/2, T/2 + 0.9*U);
-  popMain.userData.isPOP = true;
-  popMain.userData.popSide = 'front';
-  popMain.renderOrder = 40;
-  group.add(popMain);
-
-  // 側面包覆板：中/右版本在右側，左版本在左側。
-  const sx = isLeft ? -W1/2 : W1/2;
-  const sidePts = [
-    [-D1/2, 0],
-    [ D1/2, 0],
-    [ D1/2, H],
-    [-D1/2 + D1*0.30, H],
-    [-D1/2, H1]
+  // 左折板：外側低 116cm，靠中間高 223cm，上端有 22cm 短直段後斜切
+  const leftPts = [
+    [0, 0],
+    [sideW, 0],
+    [sideW, H],
+    [sideW - topFlat, H],
+    [0, lowH]
   ];
 
-  const side = makeVerticalShapeMesh(sidePts, T, boardMat);
-  side.rotation.y = Math.PI/2;
-  side.position.set(sx, H/2, -D1/2);
-  side.castShadow = true;
-  side.receiveShadow = true;
-  group.add(side);
+  // 右折板：靠中間高 223cm，外側低 116cm
+  const rightPts = [
+    [0, 0],
+    [sideW, 0],
+    [sideW, lowH],
+    [topFlat, H],
+    [0, H]
+  ];
 
-  const sidePop = makeVerticalShapePOP(sidePts, makeBlankPOPMaterial());
-  sidePop.rotation.y = Math.PI/2;
-  sidePop.position.set(sx + (isLeft ? -T/2 - 0.9*U : T/2 + 0.9*U), H/2, -D1/2);
-  sidePop.userData.isPOP = true;
-  sidePop.userData.popSide = isLeft ? 'right' : 'left';
-  sidePop.renderOrder = 40;
-  group.add(sidePop);
+  const leftRot = -foldAngle;
+  const rightRot = foldAngle;
 
-  // 底部內縮盒：對應圖中的 81cm 高與 69.4cm 深度，讓模型不只是兩片板。
-  const insetBox = new THREE.Mesh(
-    new THREE.BoxGeometry(W1 * 0.42, H1, D2),
-    new THREE.MeshLambertMaterial({color:0xf3f0ea})
-  );
-  insetBox.position.set(isLeft ? -W1*0.28 : W1*0.28, H1/2, D2/2 - 2*U);
-  insetBox.castShadow = true;
-  insetBox.receiveShadow = true;
-  group.add(insetBox);
+  addPanelWithPOP(group, {
+    name:'左折板',
+    side:'left',
+    points:leftPts,
+    thickness:T,
+    material:boardMat,
+    position:new THREE.Vector3(-centerW/2,0,0),
+    rotationY:leftRot
+  });
 
-  // 轉角收邊與底部踢腳
-  const corner = new THREE.Mesh(new THREE.BoxGeometry(3*U, H, 3*U), edgeMat);
-  corner.position.set(sx, H/2, 0);
-  group.add(corner);
+  addPanelWithPOP(group, {
+    name:'右折板',
+    side:'right',
+    points:rightPts,
+    thickness:T,
+    material:boardMat,
+    position:new THREE.Vector3(centerW/2,0,0),
+    rotationY:rightRot
+  });
 
-  const kick = new THREE.Mesh(new THREE.BoxGeometry(W1, 5*U, 2*U), edgeMat);
-  kick.position.set(0, 2.5*U, T/2 + 1.5*U);
+  // 背面備用貼圖面
+  const backPop = addPanelWithPOP(group, {
+    name:'背面中央',
+    side:'back',
+    points:centerPts,
+    thickness:T,
+    material:new THREE.MeshLambertMaterial({color:new THREE.Color(color), transparent:true, opacity:0.0}),
+    position:new THREE.Vector3(0,0,-T-1*U),
+    rotationY:Math.PI
+  });
+  backPop.panel.visible = false;
+
+  // 折線收邊：讓它一看就是立體折板
+  const lineMat = new THREE.MeshLambertMaterial({color:0x2b2b2b});
+  [-centerW/2, centerW/2].forEach(x=>{
+    const fold = new THREE.Mesh(new THREE.BoxGeometry(2*U, H, 2*U), lineMat);
+    fold.position.set(x, H/2, 0);
+    group.add(fold);
+  });
+
+  // 底部小厚度踢腳
+  const kick = new THREE.Mesh(new THREE.BoxGeometry(centerW, 4*U, T*1.4), edgeMat);
+  kick.position.set(0, 2*U, T*0.7);
   group.add(kick);
 
-  // 透明背面備用，可讓右鍵上傳背面不報錯。
-  const popBack = makeVerticalShapePOP(mainPts, makeBlankPOPMaterial());
-  popBack.rotation.y = Math.PI;
-  popBack.position.set(0, H/2, -T/2 - 0.9*U);
-  popBack.userData.isPOP = true;
-  popBack.userData.popSide = 'back';
-  popBack.renderOrder = 40;
-  group.add(popBack);
-
-  group.userData.popFront = popMain;
-  group.userData.popBack = popBack;
-  if(isLeft){
-    group.userData.popRight = sidePop;
-  }else{
-    group.userData.popLeft = sidePop;
+  // U型/A型：稍微調整折角與視覺形式
+  if(variant === 'U'){
+    group.children.forEach(c=>{
+      if(c.userData.panelName === '左折板') c.rotation.y = -Math.PI/2;
+      if(c.userData.panelName === '右折板') c.rotation.y = Math.PI/2;
+      if(c.userData.panelName === '左折板' || c.userData.panelName === '右折板'){
+        // POP 會跟著原本設定，此處保留基本三面包覆結構
+      }
+    });
   }
-  group.userData.popMesh = popMain;
+  if(variant === 'A'){
+    // A型視覺：左右折板稍向內，較像屋型斜面
+    group.rotation.y = 0;
+  }
 
-  // 尺寸說明儲存在物件上，右側面板與輸出可讀
-  group.userData.escalatorSpec = {W1:150, D1:60, H:220, H1:81, D2:69.4};
+  group.userData.isReal3DEscalatorBackwall = true;
+  group.userData.escalator3DSpec = {
+    centerW:176, centerH:223, sideW:199, lowH:116, topFlat:22, thickness:'5mm'
+  };
 }
 
 
@@ -1873,16 +1921,16 @@ function buildMesh(item, color){
       group.add(popL); group.userData.popFront=popL;
       break;
     }
-    case 'escalator_wrap_precise_center':{
-      buildPreciseEscalatorWrapBackwall(group, item, color, 'center');
+    case 'escalator_under_T_3d':{
+      buildReal3DEscalatorUnderBackwall(group, item, color, 'T');
       break;
     }
-    case 'escalator_wrap_precise_left':{
-      buildPreciseEscalatorWrapBackwall(group, item, color, 'left');
+    case 'escalator_under_A_3d':{
+      buildReal3DEscalatorUnderBackwall(group, item, color, 'A');
       break;
     }
-    case 'escalator_wrap_precise_right':{
-      buildPreciseEscalatorWrapBackwall(group, item, color, 'right');
+    case 'escalator_under_U_3d':{
+      buildReal3DEscalatorUnderBackwall(group, item, color, 'U');
       break;
     }
     case 'escalator_wrap_backwall':{
@@ -2095,9 +2143,9 @@ function renderItemCard(list, item, isCustom){
           <option value="arch">拱形（圓弧頂）</option>
           <option value="lshape">L形</option>
           <option value="escalator_wrap">手扶梯下方包覆雙面</option>
-          <option value="escalator_precise_center">手扶梯下方包覆背板 中（精準）</option>
-          <option value="escalator_precise_left">手扶梯下方包覆背板 左（精準）</option>
-          <option value="escalator_precise_right">手扶梯下方包覆背板 右（精準）</option>
+          <option value="escalator_under_T_3d">手扶梯下背板 T型 立體</option>
+          <option value="escalator_under_A_3d">手扶梯下背板 A型 立體</option>
+          <option value="escalator_under_U_3d">手扶梯下背板 U型 立體</option>
         </select>
       </div>` : '';
 
@@ -2132,7 +2180,7 @@ function renderItemCard(list, item, isCustom){
         const bwShape = shapeEl ? shapeEl.value : 'rect';
         const shapeNames = {rect:'矩形',wide:'寬版橫幅',tall:'窄版直立',arch:'拱形',lshape:'L形'};
         const prefix = isChest ? '臥式冷凍櫃' : isBW ? `背板(${shapeNames[bwShape]||''})` : '蛋糕櫃';
-        const finalShape = isBW ? (bwShape==='arch'?'backwall_arch':bwShape==='lshape'?'backwall_l':bwShape==='escalator_wrap'?'escalator_wrap_backwall':bwShape==='escalator_precise_center'?'escalator_wrap_precise_center':bwShape==='escalator_precise_left'?'escalator_wrap_precise_left':bwShape==='escalator_precise_right'?'escalator_wrap_precise_right':'backwall') : item.shape;
+        const finalShape = isBW ? (bwShape==='arch'?'backwall_arch':bwShape==='lshape'?'backwall_l':bwShape==='escalator_wrap'?'escalator_wrap_backwall':bwShape==='escalator_under_T_3d'?'escalator_under_T_3d':bwShape==='escalator_under_A_3d'?'escalator_under_A_3d':bwShape==='escalator_under_U_3d'?'escalator_under_U_3d':'backwall') : item.shape;
         const customItem = {...item,
           id:(isChest?'chest_c_':isBW?'bw_c_':'cake_dt_c_')+Date.now(),
           w, d, h,
@@ -2165,7 +2213,7 @@ function renderItemCard(list, item, isCustom){
     <div style="display:flex;align-items:center;gap:8px;width:100%">
       <div class="item-icon">${item.icon}</div>
       <div class="item-info" style="flex:1;min-width:0;">
-        <div class="item-name">${item.name}${item.shape&&item.shape.indexOf('escalator_wrap_precise')===0?'<span class="escalator-template-badge">精準</span>':''}${customBadge}</div>
+        <div class="item-name">${item.name}${item.shape&&item.shape.indexOf('escalator_under_')===0?'<span style="font-size:9px;background:#2f6fd6;color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px;">3D</span>':''}${customBadge}</div>
         <div class="item-size">${item.w}×${item.d}×${item.h} cm</div>
       </div>
     </div>
@@ -2432,7 +2480,7 @@ function selectObject(obj){
   document.getElementById('pop-single').style.display = 'none';
   document.getElementById('pop-multi').style.display  = hasPOP ? 'flex' : 'none';
   const popHint = document.getElementById('pop-side-hint');
-  if(popHint) popHint.style.display = (obj.item.shape === 'escalator_wrap_backwall' || (obj.item.shape&&obj.item.shape.indexOf('escalator_wrap_precise')===0)) ? 'block' : 'none';
+  if(popHint) popHint.style.display = (obj.item.shape === 'escalator_wrap_backwall' || (obj.item.shape&&obj.item.shape.indexOf('escalator_under_')===0)) ? 'block' : 'none';
   // reset label highlights for four-face
   if(hasPOP){
     ['front','left','right','back'].forEach(side=>{
