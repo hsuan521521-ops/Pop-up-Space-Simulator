@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v9.0</title>
+<title>自製空間模擬系統 Pro v9.1</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -42,20 +42,18 @@
   #main{display:flex;flex:1;overflow:hidden;}
 
   /* LEFT PANEL */
-  #leftpanel{width:290px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
-  .cat-tabs{display:grid;grid-template-columns:repeat(4,1fr);padding:8px;gap:6px;border-bottom:1px solid var(--border);}
-  .cat-tab{padding:8px 4px;border-radius:6px;cursor:pointer;font-size:11px;color:var(--text2);border:1px solid transparent;transition:all .15s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  #leftpanel{width:200px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  .cat-tabs{display:flex;flex-wrap:wrap;padding:8px;gap:4px;border-bottom:1px solid var(--border);}
+  .cat-tab{padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;color:var(--text2);border:1px solid transparent;transition:all .15s;}
   .cat-tab:hover{color:var(--text);background:var(--panel2);}
   .cat-tab.active{background:var(--accent);color:#1a1410;font-weight:500;}
   #item-list{flex:1;overflow-y:auto;padding:8px;}
   #item-list::-webkit-scrollbar{width:4px;}
   #item-list::-webkit-scrollbar-track{background:transparent;}
   #item-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-  .item-card{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:8px;margin-bottom:8px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px;}
-  .item-card:hover{border-color:var(--accent);background:#352d24;transform:translateY(-1px);}
-  .item-card.template-card{height:96px;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;}
-  .item-card.template-card.active{border-color:#3d82ff;box-shadow:0 0 0 2px rgba(61,130,255,.35) inset;}
-  .item-icon{width:48px;height:48px;border-radius:5px;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;background-size:cover;background-position:center;}
+  .item-card{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px;}
+  .item-card:hover{border-color:var(--accent);background:#352d24;}
+  .item-icon{width:32px;height:32px;border-radius:4px;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
   .item-info{flex:1;min-width:0;}
   .item-name{font-size:12px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .item-size{font-size:10px;color:var(--text3);}
@@ -99,7 +97,7 @@
   .view-btn:hover{border-color:var(--accent);color:var(--accent);}
 
   /* RIGHT PANEL */
-  #rightpanel{width:260px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  #rightpanel{width:200px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
   .rp-section{padding:10px;border-bottom:1px solid var(--border);}
   .rp-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
   .prop-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
@@ -147,23 +145,7 @@
   .btn-cancel{background:transparent;border:1px solid var(--border);color:var(--text2);}
   .btn-ok{background:var(--accent);border:1px solid var(--accent);color:#1a1410;font-weight:500;}
 
-  /* DESIGN TEMPLATE SYSTEM */
-  .section-title-mini{font-size:12px;color:var(--text2);font-weight:600;margin:10px 8px 8px;display:flex;align-items:center;gap:6px;}
-  .template-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 6px 8px;}
-  .template-preview{width:58px;height:48px;margin:0 auto 6px;position:relative;transform-style:preserve-3d;}
-  .tpl-wall{position:absolute;background:linear-gradient(135deg,#eee7df,#cfc7bd);border:1px solid rgba(0,0,0,.18);box-shadow:0 5px 12px rgba(0,0,0,.25);}
-  .tpl-full{left:8px;top:4px;width:42px;height:42px;}
-  .tpl-l-a{left:6px;top:8px;width:24px;height:38px;transform:skewY(-3deg);}
-  .tpl-l-b{left:31px;top:14px;width:22px;height:31px;transform:skewY(5deg);}
-  .tpl-arch{left:10px;top:10px;width:38px;height:36px;border-radius:20px 20px 2px 2px;}
-  .tpl-es-main{left:7px;top:6px;width:36px;height:42px;clip-path:polygon(20% 0,100% 0,100% 100%,0 100%,0 32%);}
-  .tpl-es-side{left:41px;top:15px;width:15px;height:31px;transform:skewY(-15deg);opacity:.9;}
-  .tpl-column{left:18px;top:5px;width:24px;height:42px;border-radius:3px;}
-  .tpl-curve{left:11px;top:8px;width:38px;height:38px;border-radius:50% 50% 8px 8px / 18% 18% 8px 8px;}
-  #template-dock{position:absolute;left:0;right:260px;bottom:0;height:118px;background:rgba(26,20,16,.92);border-top:1px solid var(--border);z-index:4;display:none;padding:10px 12px;overflow-x:auto;gap:10px;}
-  #template-dock.show{display:flex;}
-  .dock-card{width:120px;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:8px;text-align:center;cursor:pointer;transition:.15s;color:var(--text2);font-size:11px;}
-  .dock-card:hover,.dock-card.active{border-color:#3d82ff;color:#fff;background:#2d3545;}
+  .escalator-template-badge{display:inline-block;font-size:9px;background:#2f6fd6;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px;}
 
 </style>
 </head>
@@ -171,7 +153,7 @@
 
 <!-- TOP BAR -->
 <div id="topbar">
-  <div class="logo">自製空間模擬系統 <b style="font-family:'Noto Sans TC',sans-serif;font-size:12px;background:#7a5a22;color:#ffe6b0;border-radius:12px;padding:2px 8px;margin-left:4px;">v9.0</b><span>百貨快閃櫃｜模板配置系統</span></div>
+  <div class="logo">望思甜點<span>快閃攤位模擬器</span></div>
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="undo()">↩ 復原</button>
   <button class="tb-btn" onclick="redo()">↪ 重做</button>
@@ -259,8 +241,6 @@
       <div style="font-size:10px;color:var(--text3);line-height:1.5;margin-top:7px;">Shift＋左鍵拖曳 / 滑鼠中鍵拖曳：平移虛擬空間</div>
     </div>
 
-    <div id="template-dock"></div>
-
     <!-- AI SCAN PANEL (overlays canvas) -->
     <div id="ai-panel">
       <div class="ai-status" id="ai-status-bar">
@@ -347,7 +327,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯包覆背板：正面＝主背板；左/右側＝側面包覆板</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯包覆背板：正面＝斜切主背板；左/右側＝側面垂直板；底部已含 81cm / 69.4cm 內縮</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -819,15 +799,15 @@
 <script>
 // ===================== DATA =====================
 const CATEGORIES = [
-  {id:'other',        name:'道具物件', icon:'🧰'},
-  {id:'backwall',     name:'牆板背板', icon:'🧱'},
-  {id:'steeltable',   name:'桌子', icon:'▱'},
-  {id:'shelving',     name:'層架', icon:'▤'},
-  {id:'cake_fridge',  name:'蛋糕冰箱', icon:'🧊'},
-  {id:'chest_freezer',name:'冷凍櫃', icon:'❄️'},
-  {id:'upright_fridge',name:'立式冰箱', icon:'▯'},
-  {id:'lighting',     name:'燈光', icon:'💡'},
-  {id:'product',      name:'商品', icon:'🍰'},
+  {id:'cake_fridge',  name:'蛋糕展示冰箱'},
+  {id:'chest_freezer',name:'臥式冷凍櫃'},
+  {id:'upright_fridge',name:'立式冰箱'},
+  {id:'steeltable',   name:'桌子'},
+  {id:'shelving',     name:'層架'},
+  {id:'backwall',     name:'牆板背板'},
+  {id:'other',        name:'其他道具'},
+  {id:'lighting',     name:'燈光'},
+  {id:'product',      name:'商品'},
 ];
 
 // spec: { size, temp, humidity, voltage, watt }
@@ -889,17 +869,15 @@ const ITEMS = [
   {id:'shelf_wall_1',  cat:'shelving', name:'壁掛層板',         icon:'📐', w:100, d:25,  h:20,  cost:0, shape:'shelf_wall',  color:'#c8a87a', isDefault:true},
 
   // 背板
+  {id:'backwall_escalator_wrap_center', cat:'backwall', name:'手扶梯下方包覆背板 中', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_precise_center', color:'#f0ece6',
+   spec:{size:'W1 150×D1 60×H 220 cm / H1 81 / D2 69.4', note:'依手扶梯下方斜面製作：主面為斜板，側面為垂直板，可上傳主面與側面圖'}},
+  {id:'backwall_escalator_wrap_left', cat:'backwall', name:'手扶梯下方包覆背板 左', icon:'↰', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_precise_left', color:'#f0ece6',
+   spec:{size:'W1 150×D1 60×H 220 cm / H1 81 / D2 69.4', note:'左向包覆版本，適合左側手扶梯/斜面'}},
+  {id:'backwall_escalator_wrap_right', cat:'backwall', name:'手扶梯下方包覆背板 右', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_precise_right', color:'#f0ece6',
+   spec:{size:'W1 150×D1 60×H 220 cm / H1 81 / D2 69.4', note:'右向包覆版本，適合右側手扶梯/斜面'}},
   {id:'bw_full',    cat:'backwall', name:'全版背板',       icon:'🖼', w:300, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
   {id:'bw_escalator_wrap', cat:'backwall', name:'手扶梯下方包覆背板 雙面', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_backwall', color:'#f0ece6',
    spec:{size:'主面150×220cm＋側面60×220cm', note:'適合包覆手扶梯下方斜面/轉角位置，可上傳兩面輸出圖'}},
-  {id:'bw_escalator_wrap_left', cat:'backwall', name:'手扶梯包覆背板（左）', icon:'↰', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_backwall_left', color:'#f0ece6',
-   spec:{size:'主面150×220cm＋左側60×220cm', note:'適合手扶梯左側轉角包覆，可上傳主面與側面'}},
-  {id:'bw_escalator_wrap_right', cat:'backwall', name:'手扶梯包覆背板（右）', icon:'↱', w:150, d:60, h:220, cost:0, shape:'escalator_wrap_backwall_right', color:'#f0ece6',
-   spec:{size:'主面150×220cm＋右側60×220cm', note:'適合手扶梯右側轉角包覆，可上傳主面與側面'}},
-  {id:'bw_column_wrap', cat:'backwall', name:'柱體包覆背板', icon:'▣', w:80, d:80, h:240, cost:0, shape:'column_wrap_backwall', color:'#f0ece6',
-   spec:{size:'四面80×240cm', note:'適合包柱、電梯旁柱體，可四面上圖'}},
-  {id:'bw_curve', cat:'backwall', name:'弧形背板', icon:'◜', w:180, d:35, h:220, cost:0, shape:'curved_backwall', color:'#f0ece6',
-   spec:{size:'寬180×高220cm', note:'弧形主視覺背板，可上傳主視覺圖'}},
 
   {id:'bw_half',    cat:'backwall', name:'半版背板',        icon:'🖼', w:150, d:5,  h:250, cost:0, shape:'backwall',   color:'#f0ece6'},
   {id:'bw_wide',    cat:'backwall', name:'橫版背板',        icon:'🖼', w:300, d:5,  h:150, cost:0, shape:'backwall',   color:'#f0ece6'},
@@ -950,7 +928,7 @@ let boothName = '望思甜點';
 let history = [], historyIdx = -1;
 let isDragging = false, lastMouse = {x:0,y:0};
 let isOrbiting = false, isPanning = false;
-let currentCat = 'backwall';
+let currentCat = 'cake_fridge';
 let labelMesh = null;
 let gridHelper;
 
@@ -1136,6 +1114,7 @@ function findExistingPOPSide(group, side){
 function ensureFourSidePOP(group, item, w, d, h){
   const allowedCats = ['cake_fridge','chest_freezer','upright_fridge','steeltable','shelving','backwall','other'];
   if(!item || !allowedCats.includes(item.cat)) return;
+  if(item.shape && item.shape.indexOf('escalator_wrap_precise') === 0) return;
 
   const eps = 0.9 * U;
   const faceH = Math.max(h * 0.96, 8 * U);
@@ -1179,6 +1158,136 @@ function ensureFourSidePOP(group, item, w, d, h){
   group.userData.popRight = addOrGet('right');
   group.userData.popBack  = addOrGet('back');
   group.userData.popMesh  = group.userData.popFront;
+}
+
+
+
+function makeVerticalShapeMesh(points, depth, material){
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for(let i=1;i<points.length;i++) shape.lineTo(points[i][0], points[i][1]);
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, {depth: depth, bevelEnabled:false});
+  geo.center();
+  const mesh = new THREE.Mesh(geo, material);
+  return mesh;
+}
+
+function makeVerticalShapePOP(points, material){
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for(let i=1;i<points.length;i++) shape.lineTo(points[i][0], points[i][1]);
+  shape.closePath();
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.center();
+  const mesh = new THREE.Mesh(geo, material);
+  return mesh;
+}
+
+function buildPreciseEscalatorWrapBackwall(group, item, color, variant){
+  // 依照使用者提供的 SketchUp 圖：主面150、高220、側深60、底部內縮高81、內縮深69.4
+  const W1 = (item.w || 150) * U;
+  const D1 = (item.d || 60) * U;
+  const H  = (item.h || 220) * U;
+  const H1 = (item.innerH || item.baseInsetH || 81) * U;
+  const D2 = (item.innerD || item.baseInsetD || 69.4) * U;
+  const T  = 5 * U;
+
+  const boardMat = new THREE.MeshLambertMaterial({color:new THREE.Color(color)});
+  const edgeMat  = new THREE.MeshLambertMaterial({color:0x222222});
+
+  const isLeft = variant === 'left';
+  const isRight = variant === 'right';
+
+  // 主面是斜切五邊形：左下 → 右下 → 右上 → 左上內縮 → 左側底部內縮點
+  // 這樣視覺會更接近手扶梯下方的斜面包覆板，而不是普通矩形。
+  const cutX = W1 * 0.22;
+  const mainPts = [
+    [-W1/2, 0],
+    [ W1/2, 0],
+    [ W1/2, H],
+    [-W1/2 + cutX, H],
+    [-W1/2, H1]
+  ];
+
+  const main = makeVerticalShapeMesh(mainPts, T, boardMat);
+  main.position.set(0, H/2, 0);
+  main.castShadow = true;
+  main.receiveShadow = true;
+  group.add(main);
+
+  // 主面可貼圖面，同樣做成五邊形，不會再變成普通方形。
+  const popMain = makeVerticalShapePOP(mainPts, makeBlankPOPMaterial());
+  popMain.position.set(0, H/2, T/2 + 0.9*U);
+  popMain.userData.isPOP = true;
+  popMain.userData.popSide = 'front';
+  popMain.renderOrder = 40;
+  group.add(popMain);
+
+  // 側面包覆板：中/右版本在右側，左版本在左側。
+  const sx = isLeft ? -W1/2 : W1/2;
+  const sidePts = [
+    [-D1/2, 0],
+    [ D1/2, 0],
+    [ D1/2, H],
+    [-D1/2 + D1*0.30, H],
+    [-D1/2, H1]
+  ];
+
+  const side = makeVerticalShapeMesh(sidePts, T, boardMat);
+  side.rotation.y = Math.PI/2;
+  side.position.set(sx, H/2, -D1/2);
+  side.castShadow = true;
+  side.receiveShadow = true;
+  group.add(side);
+
+  const sidePop = makeVerticalShapePOP(sidePts, makeBlankPOPMaterial());
+  sidePop.rotation.y = Math.PI/2;
+  sidePop.position.set(sx + (isLeft ? -T/2 - 0.9*U : T/2 + 0.9*U), H/2, -D1/2);
+  sidePop.userData.isPOP = true;
+  sidePop.userData.popSide = isLeft ? 'right' : 'left';
+  sidePop.renderOrder = 40;
+  group.add(sidePop);
+
+  // 底部內縮盒：對應圖中的 81cm 高與 69.4cm 深度，讓模型不只是兩片板。
+  const insetBox = new THREE.Mesh(
+    new THREE.BoxGeometry(W1 * 0.42, H1, D2),
+    new THREE.MeshLambertMaterial({color:0xf3f0ea})
+  );
+  insetBox.position.set(isLeft ? -W1*0.28 : W1*0.28, H1/2, D2/2 - 2*U);
+  insetBox.castShadow = true;
+  insetBox.receiveShadow = true;
+  group.add(insetBox);
+
+  // 轉角收邊與底部踢腳
+  const corner = new THREE.Mesh(new THREE.BoxGeometry(3*U, H, 3*U), edgeMat);
+  corner.position.set(sx, H/2, 0);
+  group.add(corner);
+
+  const kick = new THREE.Mesh(new THREE.BoxGeometry(W1, 5*U, 2*U), edgeMat);
+  kick.position.set(0, 2.5*U, T/2 + 1.5*U);
+  group.add(kick);
+
+  // 透明背面備用，可讓右鍵上傳背面不報錯。
+  const popBack = makeVerticalShapePOP(mainPts, makeBlankPOPMaterial());
+  popBack.rotation.y = Math.PI;
+  popBack.position.set(0, H/2, -T/2 - 0.9*U);
+  popBack.userData.isPOP = true;
+  popBack.userData.popSide = 'back';
+  popBack.renderOrder = 40;
+  group.add(popBack);
+
+  group.userData.popFront = popMain;
+  group.userData.popBack = popBack;
+  if(isLeft){
+    group.userData.popRight = sidePop;
+  }else{
+    group.userData.popLeft = sidePop;
+  }
+  group.userData.popMesh = popMain;
+
+  // 尺寸說明儲存在物件上，右側面板與輸出可讀
+  group.userData.escalatorSpec = {W1:150, D1:60, H:220, H1:81, D2:69.4};
 }
 
 
@@ -1764,92 +1873,16 @@ function buildMesh(item, color){
       group.add(popL); group.userData.popFront=popL;
       break;
     }
-    case 'escalator_wrap_backwall_left':
-    case 'escalator_wrap_backwall_right':{
-      const isLeft = item.shape === 'escalator_wrap_backwall_left';
-      const boardMat = new THREE.MeshLambertMaterial({color:new THREE.Color(color)});
-      const edgeMat  = new THREE.MeshLambertMaterial({color:0x222222});
-      const t = Math.max(5*U, item.d ? 5*U : 5*U);
-
-      const main = new THREE.Mesh(new THREE.BoxGeometry(w, h, t), boardMat);
-      main.position.set(0, h/2, 0);
-      main.castShadow = true; main.receiveShadow = true;
-      group.add(main);
-
-      const sx = isLeft ? -w/2 : w/2;
-      const side = new THREE.Mesh(new THREE.BoxGeometry(d, h, t), boardMat);
-      side.rotation.y = Math.PI/2;
-      side.position.set(sx, h/2, -d/2);
-      side.castShadow = true; side.receiveShadow = true;
-      group.add(side);
-
-      const slopeH = Math.min(h*0.34, 75*U);
-      const slope = new THREE.Mesh(new THREE.BoxGeometry(w, slopeH, t), boardMat);
-      slope.rotation.x = -Math.PI/10;
-      slope.position.set(0, h - slopeH/2, -t*0.6);
-      slope.castShadow = true; slope.receiveShadow = true;
-      group.add(slope);
-
-      const corner = new THREE.Mesh(new THREE.BoxGeometry(3*U, h, 3*U), edgeMat);
-      corner.position.set(sx, h/2, 0);
-      group.add(corner);
-
-      const popFront = new THREE.Mesh(new THREE.PlaneGeometry(w*0.98, h*0.96), makeBlankPOPMaterial());
-      popFront.position.set(0, h/2, t/2 + 0.8*U);
-      popFront.userData.isPOP = true; popFront.userData.popSide = 'front'; popFront.renderOrder = 30;
-      group.add(popFront);
-
-      const popSide = new THREE.Mesh(new THREE.PlaneGeometry(d*0.98, h*0.96), makeBlankPOPMaterial());
-      popSide.rotation.y = Math.PI/2;
-      popSide.position.set(sx + (isLeft ? -t/2 - 0.8*U : t/2 + 0.8*U), h/2, -d/2);
-      popSide.userData.isPOP = true; popSide.userData.popSide = isLeft ? 'right' : 'left'; popSide.renderOrder = 30;
-      group.add(popSide);
-
-      group.userData.popFront = popFront;
-      if(isLeft){ group.userData.popRight = popSide; }
-      else { group.userData.popLeft = popSide; }
-      group.userData.popMesh = popFront;
+    case 'escalator_wrap_precise_center':{
+      buildPreciseEscalatorWrapBackwall(group, item, color, 'center');
       break;
     }
-    case 'column_wrap_backwall':{
-      const boardMat = new THREE.MeshLambertMaterial({color:new THREE.Color(color)});
-      const t = 4*U;
-      const faces = [
-        {side:'front', pos:[0,h/2,d/2], rot:0, pw:w},
-        {side:'back',  pos:[0,h/2,-d/2], rot:Math.PI, pw:w},
-        {side:'left',  pos:[-w/2,h/2,0], rot:Math.PI/2, pw:d},
-        {side:'right', pos:[w/2,h/2,0], rot:-Math.PI/2, pw:d},
-      ];
-      const box = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), boardMat);
-      box.position.y = h/2; box.castShadow=true; box.receiveShadow=true; group.add(box);
-      faces.forEach(f=>{
-        const p = new THREE.Mesh(new THREE.PlaneGeometry(f.pw*0.98,h*0.96), makeBlankPOPMaterial());
-        p.position.set(...f.pos);
-        p.rotation.y = f.rot;
-        p.userData.isPOP = true;
-        p.userData.popSide = f.side;
-        p.renderOrder = 30;
-        group.add(p);
-        group.userData['pop'+f.side.charAt(0).toUpperCase()+f.side.slice(1)] = p;
-      });
-      group.userData.popMesh = group.userData.popFront;
+    case 'escalator_wrap_precise_left':{
+      buildPreciseEscalatorWrapBackwall(group, item, color, 'left');
       break;
     }
-    case 'curved_backwall':{
-      const boardMat = new THREE.MeshLambertMaterial({color:new THREE.Color(color), side:THREE.DoubleSide});
-      const curve = new THREE.CylinderGeometry(w/2, w/2, h, 36, 1, true, Math.PI*0.18, Math.PI*0.64);
-      const panel = new THREE.Mesh(curve, boardMat);
-      panel.rotation.z = Math.PI/2;
-      panel.position.y = h/2;
-      panel.castShadow=true; panel.receiveShadow=true;
-      group.add(panel);
-
-      const pop = new THREE.Mesh(new THREE.PlaneGeometry(w*0.92, h*0.92), makeBlankPOPMaterial());
-      pop.position.set(0,h/2,d/2+1*U);
-      pop.userData.isPOP=true; pop.userData.popSide='front'; pop.renderOrder=30;
-      group.add(pop);
-      group.userData.popFront = pop;
-      group.userData.popMesh = pop;
+    case 'escalator_wrap_precise_right':{
+      buildPreciseEscalatorWrapBackwall(group, item, color, 'right');
       break;
     }
     case 'escalator_wrap_backwall':{
@@ -1972,7 +2005,7 @@ function buildUI(){
   CATEGORIES.forEach(cat=>{
     const t = document.createElement('div');
     t.className='cat-tab'+(cat.id===currentCat?' active':'');
-    t.innerHTML=`<span style="font-size:20px;line-height:1">${cat.icon||'□'}</span><span>${cat.name}</span>`;
+    t.textContent=cat.name;
     t.onclick=()=>{ currentCat=cat.id; document.querySelectorAll('.cat-tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); renderItemList(); };
     tabs.appendChild(t);
   });
@@ -1988,50 +2021,6 @@ function buildUI(){
     cs.appendChild(s);
   });
 }
-
-
-function getTemplatePreviewHTML(item){
-  if(item.shape === 'backwall') return '<div class="template-preview"><div class="tpl-wall tpl-full"></div></div>';
-  if(item.shape === 'backwall_l') return '<div class="template-preview"><div class="tpl-wall tpl-l-a"></div><div class="tpl-wall tpl-l-b"></div></div>';
-  if(item.shape === 'backwall_arch') return '<div class="template-preview"><div class="tpl-wall tpl-arch"></div></div>';
-  if(item.shape && item.shape.includes('escalator_wrap')) return '<div class="template-preview"><div class="tpl-wall tpl-es-main"></div><div class="tpl-wall tpl-es-side"></div></div>';
-  if(item.shape === 'column_wrap_backwall') return '<div class="template-preview"><div class="tpl-wall tpl-column"></div><div class="tpl-wall tpl-column" style="left:28px;opacity:.65;"></div></div>';
-  if(item.shape === 'curved_backwall') return '<div class="template-preview"><div class="tpl-wall tpl-curve"></div></div>';
-  return '<div class="template-preview"><div class="tpl-wall tpl-full"></div></div>';
-}
-
-function renderBackwallTemplateCard(list, item){
-  const card = document.createElement('div');
-  card.className = 'item-card template-card';
-  card.innerHTML = `
-    <div style="width:100%;">
-      ${getTemplatePreviewHTML(item)}
-      <div class="item-name" style="white-space:normal;line-height:1.35;">${item.name}</div>
-      <div class="item-size">${item.w}×${item.d}×${item.h} cm</div>
-    </div>`;
-  card.onclick = () => startPlacing(item);
-  list.appendChild(card);
-}
-
-function renderTemplateDock(){
-  const dock = document.getElementById('template-dock');
-  if(!dock) return;
-  dock.innerHTML = '';
-  if(currentCat !== 'backwall'){
-    dock.classList.remove('show');
-    return;
-  }
-  dock.classList.add('show');
-  const tplItems = ITEMS.filter(i=>i.cat==='backwall' && !i.isCustomBackwall);
-  tplItems.forEach(item=>{
-    const c = document.createElement('div');
-    c.className = 'dock-card';
-    c.innerHTML = `${getTemplatePreviewHTML(item)}<div>${item.name}</div>`;
-    c.onclick = () => startPlacing(item);
-    dock.appendChild(c);
-  });
-}
-
 
 function renderItemList(){
   const list = document.getElementById('item-list');
@@ -2079,24 +2068,6 @@ function renderItemList(){
     return;
   }
 
-  if(currentCat === 'backwall'){
-    const title = document.createElement('div');
-    title.className = 'section-title-mini';
-    title.innerHTML = '▧ 牆板背板選擇 <span style="font-size:10px;color:var(--text3);font-weight:400;">可上傳圖片</span>';
-    list.appendChild(title);
-
-    const grid = document.createElement('div');
-    grid.className = 'template-grid';
-    list.appendChild(grid);
-
-    ITEMS.filter(i=>i.cat===currentCat && !i.isCustomBackwall).forEach(item => renderBackwallTemplateCard(grid, item));
-    const custom = ITEMS.find(i=>i.isCustomBackwall);
-    if(custom) renderItemCard(list, custom, false);
-    renderTemplateDock();
-    return;
-  }
-
-  renderTemplateDock();
   ITEMS.filter(i=>i.cat===currentCat).forEach(item => renderItemCard(list, item, false));
 }
 
@@ -2124,6 +2095,9 @@ function renderItemCard(list, item, isCustom){
           <option value="arch">拱形（圓弧頂）</option>
           <option value="lshape">L形</option>
           <option value="escalator_wrap">手扶梯下方包覆雙面</option>
+          <option value="escalator_precise_center">手扶梯下方包覆背板 中（精準）</option>
+          <option value="escalator_precise_left">手扶梯下方包覆背板 左（精準）</option>
+          <option value="escalator_precise_right">手扶梯下方包覆背板 右（精準）</option>
         </select>
       </div>` : '';
 
@@ -2156,9 +2130,9 @@ function renderItemCard(list, item, isCustom){
         const h = parseInt(document.getElementById(uid+'_h').value)||hDefault;
         const shapeEl = document.getElementById(uid+'_shape');
         const bwShape = shapeEl ? shapeEl.value : 'rect';
-        const shapeNames = {rect:'矩形',wide:'寬版橫幅',tall:'窄版直立',arch:'拱形',lshape:'L形',escalator_wrap:'手扶梯下方包覆雙面'};
+        const shapeNames = {rect:'矩形',wide:'寬版橫幅',tall:'窄版直立',arch:'拱形',lshape:'L形'};
         const prefix = isChest ? '臥式冷凍櫃' : isBW ? `背板(${shapeNames[bwShape]||''})` : '蛋糕櫃';
-        const finalShape = isBW ? (bwShape==='arch'?'backwall_arch':bwShape==='lshape'?'backwall_l':bwShape==='escalator_wrap'?'escalator_wrap_backwall':'backwall') : item.shape;
+        const finalShape = isBW ? (bwShape==='arch'?'backwall_arch':bwShape==='lshape'?'backwall_l':bwShape==='escalator_wrap'?'escalator_wrap_backwall':bwShape==='escalator_precise_center'?'escalator_wrap_precise_center':bwShape==='escalator_precise_left'?'escalator_wrap_precise_left':bwShape==='escalator_precise_right'?'escalator_wrap_precise_right':'backwall') : item.shape;
         const customItem = {...item,
           id:(isChest?'chest_c_':isBW?'bw_c_':'cake_dt_c_')+Date.now(),
           w, d, h,
@@ -2191,7 +2165,7 @@ function renderItemCard(list, item, isCustom){
     <div style="display:flex;align-items:center;gap:8px;width:100%">
       <div class="item-icon">${item.icon}</div>
       <div class="item-info" style="flex:1;min-width:0;">
-        <div class="item-name">${item.name}${customBadge}</div>
+        <div class="item-name">${item.name}${item.shape&&item.shape.indexOf('escalator_wrap_precise')===0?'<span class="escalator-template-badge">精準</span>':''}${customBadge}</div>
         <div class="item-size">${item.w}×${item.d}×${item.h} cm</div>
       </div>
     </div>
@@ -2458,7 +2432,7 @@ function selectObject(obj){
   document.getElementById('pop-single').style.display = 'none';
   document.getElementById('pop-multi').style.display  = hasPOP ? 'flex' : 'none';
   const popHint = document.getElementById('pop-side-hint');
-  if(popHint) popHint.style.display = (obj.item.shape && obj.item.shape.includes('escalator_wrap_backwall')) ? 'block' : 'none';
+  if(popHint) popHint.style.display = (obj.item.shape === 'escalator_wrap_backwall' || (obj.item.shape&&obj.item.shape.indexOf('escalator_wrap_precise')===0)) ? 'block' : 'none';
   // reset label highlights for four-face
   if(hasPOP){
     ['front','left','right','back'].forEach(side=>{
