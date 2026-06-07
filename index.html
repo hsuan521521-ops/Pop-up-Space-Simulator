@@ -211,6 +211,31 @@
       <button class="view-btn" onclick="resetView()" title="重設視角">⟳</button>
     </div>
 
+    <!-- VIRTUAL SPACE MOVE PANEL -->
+    <div id="space-move-panel" style="position:absolute;left:12px;bottom:54px;background:rgba(26,20,16,.90);border:1px solid var(--border);border-radius:10px;padding:10px;width:210px;z-index:5;display:none;box-shadow:0 8px 24px rgba(0,0,0,.35);">
+      <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:8px;">↔ 移動虛擬空間</div>
+      <div style="display:grid;grid-template-columns:34px 34px 34px;gap:5px;justify-content:center;margin-bottom:8px;">
+        <div></div>
+        <button class="tb-btn" onclick="nudgeVirtualSpace(0,-12)" style="padding:4px 0;">↑</button>
+        <div></div>
+        <button class="tb-btn" onclick="nudgeVirtualSpace(-12,0)" style="padding:4px 0;">←</button>
+        <button class="tb-btn" onclick="resetVirtualSpaceOffset()" style="padding:4px 0;font-size:10px;">中</button>
+        <button class="tb-btn" onclick="nudgeVirtualSpace(12,0)" style="padding:4px 0;">→</button>
+        <div></div>
+        <button class="tb-btn" onclick="nudgeVirtualSpace(0,12)" style="padding:4px 0;">↓</button>
+        <div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:24px 1fr 34px;align-items:center;gap:5px;font-size:10px;color:var(--text2);">
+        <span>X</span>
+        <input id="virtual-offset-x" type="range" min="-400" max="400" value="0" oninput="setVirtualSpaceOffsetFromInputs()">
+        <span id="virtual-offset-x-label">0</span>
+        <span>Y</span>
+        <input id="virtual-offset-y" type="range" min="-300" max="300" value="0" oninput="setVirtualSpaceOffsetFromInputs()">
+        <span id="virtual-offset-y-label">0</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);line-height:1.5;margin-top:7px;">Shift＋左鍵拖曳 / 滑鼠中鍵拖曳：平移虛擬空間</div>
+    </div>
+
     <!-- AI SCAN PANEL (overlays canvas) -->
     <div id="ai-panel">
       <div class="ai-status" id="ai-status-bar">
@@ -2079,6 +2104,64 @@ function updateCosts(){
   document.getElementById('total-cost').textContent=`NT$ ${total.toLocaleString()} (${objects.length}件)`;
 }
 
+
+// ===================== VIRTUAL SPACE FREE MOVE =====================
+let virtualSpaceOffset = {x:0, y:0};
+let isMovingVirtualLayer = false;
+let virtualLayerDragStart = {mx:0, my:0, ox:0, oy:0};
+
+function applyVirtualSpaceOffset(){
+  const canvas = document.getElementById('three-canvas');
+  if(canvas){
+    canvas.style.transform = `translate(${virtualSpaceOffset.x}px, ${virtualSpaceOffset.y}px)`;
+    canvas.style.transformOrigin = 'center center';
+  }
+
+  const xInput = document.getElementById('virtual-offset-x');
+  const yInput = document.getElementById('virtual-offset-y');
+  const xLabel = document.getElementById('virtual-offset-x-label');
+  const yLabel = document.getElementById('virtual-offset-y-label');
+
+  if(xInput) xInput.value = Math.max(-400, Math.min(400, Math.round(virtualSpaceOffset.x)));
+  if(yInput) yInput.value = Math.max(-300, Math.min(300, Math.round(virtualSpaceOffset.y)));
+  if(xLabel) xLabel.textContent = Math.round(virtualSpaceOffset.x);
+  if(yLabel) yLabel.textContent = Math.round(virtualSpaceOffset.y);
+
+  if(renderer && scene && camera) renderer.render(scene, camera);
+}
+
+function setVirtualSpaceOffsetFromInputs(){
+  const xInput = document.getElementById('virtual-offset-x');
+  const yInput = document.getElementById('virtual-offset-y');
+  virtualSpaceOffset.x = parseInt(xInput?.value || '0', 10);
+  virtualSpaceOffset.y = parseInt(yInput?.value || '0', 10);
+  applyVirtualSpaceOffset();
+}
+
+function nudgeVirtualSpace(dx, dy){
+  virtualSpaceOffset.x += dx;
+  virtualSpaceOffset.y += dy;
+  applyVirtualSpaceOffset();
+}
+
+function resetVirtualSpaceOffset(){
+  virtualSpaceOffset.x = 0;
+  virtualSpaceOffset.y = 0;
+  applyVirtualSpaceOffset();
+}
+
+function showVirtualMovePanel(){
+  const panel = document.getElementById('space-move-panel');
+  if(panel) panel.style.display = 'block';
+  applyVirtualSpaceOffset();
+}
+
+function hideVirtualMovePanel(){
+  const panel = document.getElementById('space-move-panel');
+  if(panel) panel.style.display = 'none';
+}
+
+
 // ===================== EVENTS =====================
 function setupEvents(canvas, wrap){
   canvas.addEventListener('mousedown', onMouseDown);
@@ -2086,6 +2169,7 @@ function setupEvents(canvas, wrap){
   canvas.addEventListener('mouseup', onMouseUp);
   canvas.addEventListener('wheel', onWheel, {passive:false});
   canvas.addEventListener('contextmenu', onContextMenu);
+  canvas.addEventListener('auxclick', e=>e.preventDefault());
   window.addEventListener('keydown', onKeyDown);
   // Close context menu on any click outside it
   document.addEventListener('mousedown', e=>{
@@ -2135,6 +2219,20 @@ const DRAG_THRESHOLD = 5; // pixels
 
 function onMouseDown(e){
   e.preventDefault();
+
+  // 上傳照片後：Shift＋左鍵拖曳或滑鼠中鍵拖曳，可直接平移整個虛擬 3D 圖層
+  if(spacePhotoDataUrl && ((e.button === 0 && e.shiftKey) || e.button === 1)){
+    isMovingVirtualLayer = true;
+    virtualLayerDragStart = {
+      mx: e.clientX,
+      my: e.clientY,
+      ox: virtualSpaceOffset.x,
+      oy: virtualSpaceOffset.y
+    };
+    document.getElementById('canvas-wrap').style.cursor = 'move';
+    return;
+  }
+
   // Update mouse coords immediately (onMouseMove may not have fired yet)
   const wrap = document.getElementById('canvas-wrap');
   const rect = wrap.getBoundingClientRect();
@@ -2340,6 +2438,16 @@ let cameraTarget = new THREE.Vector3(0,0,0);
 
 function onMouseMove(e){
   const wrap=document.getElementById('canvas-wrap');
+
+  if(isMovingVirtualLayer){
+    virtualSpaceOffset.x = virtualLayerDragStart.ox + (e.clientX - virtualLayerDragStart.mx);
+    virtualSpaceOffset.y = virtualLayerDragStart.oy + (e.clientY - virtualLayerDragStart.my);
+    applyVirtualSpaceOffset();
+    wrap.style.cursor = 'move';
+    lastMouse={x:e.clientX,y:e.clientY};
+    return;
+  }
+
   const rect=wrap.getBoundingClientRect();
   mouse.x=((e.clientX-rect.left)/wrap.clientWidth)*2-1;
   mouse.y=-((e.clientY-rect.top)/wrap.clientHeight)*2+1;
@@ -2466,6 +2574,12 @@ function onMouseMove(e){
 }
 
 function onMouseUp(e){
+  if(isMovingVirtualLayer){
+    isMovingVirtualLayer = false;
+    document.getElementById('canvas-wrap').style.cursor = '';
+    return;
+  }
+
   if(isDraggingGizmo){
     isDraggingGizmo = false;
     gizmoAxis = null;
@@ -2871,22 +2985,20 @@ function applyNotionBooth(){
   buildBooth();
   resetView();
 
-  document.getElementById('btn-bg-toggle').style.display = '';
-  document.getElementById('btn-bg-mode').style.display = '';
-  spaceBgMode = '2d';
-  spaceBgVisible = true;
-
-  // 若此 Notion 地點已上傳現場照片，優先顯示真實照片；不要再用示意背景覆蓋。
+  // 如果此 Notion 地點有上傳真實照片，就使用真實照片，不再用示意圖覆蓋
   if(notionBoothPhotoUrl){
     spacePhotoDataUrl = notionBoothPhotoUrl;
     forceShowSpacePhoto(notionBoothPhotoUrl);
   }else{
     generateBoothSceneBg(selectedNotionBooth, boothW, boothD);
-    scene.background = null;
-    scene.fog = null;
-    renderer.setClearColor(0x000000, 0);
+    showVirtualMovePanel();
+    applyVirtualSpaceOffset();
   }
 
+  document.getElementById('btn-bg-toggle').style.display = '';
+  document.getElementById('btn-bg-mode').style.display = '';
+  spaceBgMode = '2d';
+  spaceBgVisible = true;
   updateBgModeBtn();
   closeSpaceImport();
 }
@@ -2997,6 +3109,8 @@ function forceShowSpacePhoto(dataUrl){
 
   spaceBgMode = '2d';
   spaceBgVisible = true;
+
+  showVirtualMovePanel();
 
   const btnToggle = document.getElementById('btn-bg-toggle');
   const btnMode = document.getElementById('btn-bg-mode');
@@ -3293,6 +3407,8 @@ function applySpaceImport(){
     document.getElementById('btn-bg-toggle').style.display='';
     document.getElementById('btn-bg-mode').style.display='';
     updateBgModeBtn();
+    showVirtualMovePanel();
+    applyVirtualSpaceOffset();
     closeSpaceImport();
   };
   img.src = spacePhotoDataUrl;
@@ -3334,6 +3450,7 @@ function toggleSpaceBg(){
       scene.fog = null;
       renderer.setClearColor(0x000000, 0);
     }
+    showVirtualMovePanel();
     document.getElementById('btn-bg-toggle').textContent = '👁 隱藏背景';
   }else{
     if(bg) bg.style.display = 'none';
@@ -3363,6 +3480,7 @@ function toggleSpaceBg(){
     if(gridHelper) gridHelper.visible = true;
     if(labelMesh) labelMesh.visible = true;
 
+    hideVirtualMovePanel();
     document.getElementById('btn-bg-toggle').textContent = '👁 顯示背景';
   }
 }
