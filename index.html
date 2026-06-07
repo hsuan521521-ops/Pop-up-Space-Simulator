@@ -177,6 +177,7 @@
   <button class="tb-btn" onclick="showComposite()">🏙 場景合成</button>
   <button class="tb-btn" onclick="showCompositePro()" style="border-color:#7aabb8;color:#7aabb8;">📐 合成 Pro</button>
   <button class="tb-btn" style="border-color:var(--accent);color:var(--accent);" onclick="showAIPanel()">✦ AI 掃描物品</button>
+  <button class="tb-btn" style="border-color:#7aabb8;color:#7aabb8;" onclick="showImageObjectPanel()">🖼 任意圖片物件</button>
   <button class="tb-btn" onclick="saveScene()">💾 存檔</button>
   <button class="tb-btn" onclick="loadScene()">📂 讀檔</button>
   <button class="tb-btn" onclick="showSettings()">⚙ 設定</button>
@@ -288,6 +289,26 @@
             <span class="prop-label">旋轉°</span>
             <input class="prop-val" type="number" id="prop-rot" step="15" onchange="updateProp('rot',this.value)">
           </div>
+          <div id="custom-img-props" style="display:none;border-top:1px solid var(--border);padding-top:8px;margin:8px 0;">
+            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">圖片物件變形</div>
+            <div class="prop-row">
+              <span class="prop-label">寬cm</span>
+              <input class="prop-val" type="number" id="prop-img-w" step="5" onchange="updateImageObjectProp('w',this.value)">
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">高cm</span>
+              <input class="prop-val" type="number" id="prop-img-h" step="5" onchange="updateImageObjectProp('h',this.value)">
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">前後斜</span>
+              <input class="prop-val" type="number" id="prop-img-tilt-x" step="5" onchange="updateImageObjectProp('tiltX',this.value)">
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">左右斜</span>
+              <input class="prop-val" type="number" id="prop-img-tilt-z" step="5" onchange="updateImageObjectProp('tiltZ',this.value)">
+            </div>
+            <button class="action-btn" onclick="replaceSelectedImageObject()">🖼 重新上傳圖片</button>
+          </div>
           <div style="margin-bottom:6px;">
             <div class="prop-label" style="width:100%;margin-bottom:4px;">顏色</div>
             <div class="color-row" id="color-swatches"></div>
@@ -296,6 +317,12 @@
           <button class="action-btn del" onclick="deleteSelected()">✕ 刪除物件</button>
           <div id="pop-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
             <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">輸出物圖片</div>
+            <div id="quick-pop-upload-panel" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
+              <button class="action-btn" onclick="quickUploadPOP('front')" style="margin:0;text-align:center;">正面</button>
+              <button class="action-btn" onclick="quickUploadPOP('back')" style="margin:0;text-align:center;">背面</button>
+              <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
+              <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
+            </div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -403,6 +430,14 @@
 <div id="ctx-menu">
   <div class="ctx-item" id="ctx-name" style="color:var(--text2);font-size:11px;cursor:default;padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:2px;"></div>
   <div class="ctx-item" id="ctx-resize" onclick="ctxResize()" style="display:none;">📐 更改尺寸</div>
+  <div class="ctx-item" id="ctx-replace-custom-image" onclick="ctxReplaceCustomImage()" style="display:none;">🖼 重新上傳圖片物件</div>
+  <div id="ctx-upload-section" style="display:none;">
+    <div class="ctx-item" id="ctx-upload-front" onclick="ctxUploadPOP('front')">🖼 上傳正面圖片</div>
+    <div class="ctx-item" id="ctx-upload-left" onclick="ctxUploadPOP('left')">🖼 上傳左側圖片</div>
+    <div class="ctx-item" id="ctx-upload-right" onclick="ctxUploadPOP('right')">🖼 上傳右側圖片</div>
+    <div class="ctx-item" id="ctx-upload-back" onclick="ctxUploadPOP('back')">🖼 上傳背面圖片</div>
+    <div class="ctx-sep"></div>
+  </div>
   <div class="ctx-item" onclick="ctxDuplicate()">⧉ 複製</div>
   <div class="ctx-item" onclick="ctxRotate(45)">↻ 旋轉 45°</div>
   <div class="ctx-item" onclick="ctxRotate(-45)">↺ 旋轉 -45°</div>
@@ -652,6 +687,71 @@
 
   </div>
 </div>
+
+
+<!-- CUSTOM IMAGE OBJECT MODAL -->
+<div id="image-object-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:220;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;width:min(560px,94vw);max-height:92vh;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 10px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:16px;font-family:'Playfair Display',serif;color:var(--accent2);margin:0;">🖼 任意圖片物件</h3>
+      <button onclick="closeImageObjectPanel()" style="background:transparent;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+
+    <div style="padding:16px 20px 20px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;">
+      <label style="display:block;background:var(--panel2);border:2px dashed var(--border);border-radius:8px;padding:22px;text-align:center;cursor:pointer;">
+        <div style="font-size:34px;margin-bottom:8px;">🖼</div>
+        <div style="font-size:13px;color:var(--text2);">點擊上傳任何圖片</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">可做成立牌、人物、商品、LOGO、裝飾物件</div>
+        <input type="file" id="custom-img-input" accept="image/*" style="display:none;" onchange="loadCustomImageObject(this)">
+      </label>
+
+      <div id="custom-img-preview-wrap" style="display:none;background:#111;border-radius:8px;overflow:hidden;min-height:160px;align-items:center;justify-content:center;">
+        <img id="custom-img-preview" style="max-width:100%;max-height:240px;object-fit:contain;display:block;">
+      </div>
+
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;">圖片處理</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;margin-bottom:8px;">
+          <input type="checkbox" id="custom-img-remove-bg" style="accent-color:var(--accent);" onchange="refreshCustomImagePreview()">
+          幫我去背（本機白底 / 淺色背景去背）
+        </label>
+        <div style="font-size:10px;color:var(--text3);line-height:1.5;">適合商品圖、LOGO、白底人物照。複雜背景建議先用專業去背工具處理後再上傳。</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">寬度 cm</div>
+          <input id="custom-img-w" type="number" value="80" min="5" max="1000" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:7px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">高度 cm</div>
+          <input id="custom-img-h" type="number" value="120" min="5" max="1000" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:7px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">厚度 cm</div>
+          <input id="custom-img-d" type="number" value="2" min="0" max="50" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:7px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;">
+        </div>
+      </div>
+
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;">放入場景後可調整</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7;">
+          ✓ X / Z 位置<br>
+          ✓ 360° 水平旋轉<br>
+          ✓ 前後傾斜、左右斜放<br>
+          ✓ 寬高縮放<br>
+          ✓ 右鍵可重新上傳圖片
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeImageObjectPanel()" style="flex:1;padding:9px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:13px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">取消</button>
+        <button onclick="addCustomImageObjectToScene()" style="flex:2;padding:9px;background:var(--accent);border:none;border-radius:6px;color:#1a1410;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">＋ 加入場景</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- SETTINGS MODAL -->
 <div id="modal-overlay">
@@ -1047,6 +1147,7 @@ function ensureFourSidePOP(group, item, w, d, h){
 
 
 function buildMesh(item, color){
+  if(item.shape === 'custom_image_plane') return buildCustomImageObjectMesh(item);
   color = color || item.color;
   const mat = new THREE.MeshLambertMaterial({color: new THREE.Color(color)});
   const matDark = new THREE.MeshLambertMaterial({color: new THREE.Color(darken(color, 0.7))});
@@ -1897,16 +1998,22 @@ function applyPOPToSide(input, side){
     img.onload = () => {
       // 保留原始解析度
       const canvas = document.createElement('canvas');
-      canvas.width  = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
+      const maxTex = 2048;
+      let tw = img.naturalWidth;
+      let th = img.naturalHeight;
+      const ratio = Math.min(1, maxTex / Math.max(tw, th));
+      tw = Math.max(1, Math.round(tw * ratio));
+      th = Math.max(1, Math.round(th * ratio));
+      canvas.width = tw;
+      canvas.height = th;
+      canvas.getContext('2d').drawImage(img, 0, 0, tw, th);
       const tex = new THREE.CanvasTexture(canvas);
       // 最高畫質設定
       tex.encoding    = THREE.sRGBEncoding;
       tex.anisotropy  = renderer.capabilities.getMaxAnisotropy();
-      tex.minFilter   = THREE.LinearMipmapLinearFilter;
+      tex.minFilter   = THREE.LinearFilter;
       tex.magFilter   = THREE.LinearFilter;
-      tex.generateMipmaps = true;
+      tex.generateMipmaps = false;
       tex.needsUpdate = true;
       const popMesh = findPOPMeshBySide(selectedObj.mesh, side);
       if(popMesh){
@@ -2060,9 +2167,18 @@ function selectObject(obj){
   document.getElementById('prop-x').value = Math.round(obj.x/U);
   document.getElementById('prop-z').value = Math.round(obj.z/U);
   document.getElementById('prop-rot').value = Math.round(obj.rot*180/Math.PI);
+  const customImgProps = document.getElementById('custom-img-props');
+  if(customImgProps){
+    customImgProps.style.display = obj.item?.isCustomImageObject ? 'block' : 'none';
+    if(obj.item?.isCustomImageObject){
+      document.getElementById('prop-img-w').value = obj.item.w || 80;
+      document.getElementById('prop-img-h').value = obj.item.h || 120;
+      document.getElementById('prop-img-tilt-x').value = obj.item.tiltX || 0;
+      document.getElementById('prop-img-tilt-z').value = obj.item.tiltZ || 0;
+    }
+  }
   // show POP panel — 冰箱 / 桌子 / 背板 / 道具 / 層架統一四面上傳
-  const popCats = ['cake_fridge','chest_freezer','upright_fridge','steeltable','shelving','backwall','other'];
-  const hasPOP = popCats.includes(obj.item.cat);
+  const hasPOP = isPOPCapableItem(obj.item);
   document.getElementById('pop-panel').style.display  = hasPOP ? 'block' : 'none';
   document.getElementById('pop-single').style.display = 'none';
   document.getElementById('pop-multi').style.display  = hasPOP ? 'flex' : 'none';
@@ -2090,6 +2206,8 @@ function deselectAll(){
   removeGizmo();
   document.getElementById('no-sel').style.display='block';
   document.getElementById('sel-props').style.display='none';
+  const customImgProps = document.getElementById('custom-img-props');
+  if(customImgProps) customImgProps.style.display='none';
   updateSceneList();
 }
 
@@ -2133,7 +2251,7 @@ function deleteSelected(){
 function duplicateSelected(){
   if(!selectedObj) return;
   const src = selectedObj;
-  const newMesh = buildMesh(src.item, src.color);
+  const newMesh = buildMesh({...src.item}, src.color);
   const nx = src.x + 10*U, nz = src.z + 10*U;
   newMesh.position.set(nx, 0, nz);
   newMesh.rotation.y = src.rot;
@@ -2351,6 +2469,36 @@ function onMouseDown(e){
   }
 }
 
+
+function isPOPCapableItem(item){
+  if(!item) return false;
+  return ['cake_fridge','chest_freezer','upright_fridge','steeltable','shelving','backwall','other'].includes(item.cat);
+}
+
+
+function ctxReplaceCustomImage(){
+  if(!ctxTargetObj) return;
+  selectObject(ctxTargetObj);
+  hideContextMenu();
+  replaceSelectedImageObject();
+}
+
+
+function ctxUploadPOP(side){
+  if(!ctxTargetObj) return;
+  selectObject(ctxTargetObj);
+  hideContextMenu();
+
+  const input = getDirectPOPInput();
+  input.onchange = () => {
+    if(!selectedObj || !input.files[0]) return;
+    applyPOPToSide(input, side);
+    input.value = '';
+  };
+  input.click();
+}
+
+
 let ctxTargetObj = null;
 
 function onContextMenu(e){
@@ -2374,6 +2522,12 @@ function onContextMenu(e){
   const isCustomSteel = ctxTargetObj.item.isCustom &&
     ['steel_table','cylinder','steel_shelf','shelf3','box'].includes(ctxTargetObj.item.shape);
   document.getElementById('ctx-resize').style.display = isCustomSteel ? 'flex' : 'none';
+
+  // 右鍵直接上傳四面圖片，不需要精準點到貼圖面
+  const replaceCustom = document.getElementById('ctx-replace-custom-image');
+  if(replaceCustom) replaceCustom.style.display = ctxTargetObj.item?.isCustomImageObject ? 'flex' : 'none';
+  const uploadSec = document.getElementById('ctx-upload-section');
+  if(uploadSec) uploadSec.style.display = (isPOPCapableItem(ctxTargetObj.item) && !ctxTargetObj.item?.isCustomImageObject) ? 'block' : 'none';
 
   // Keep menu inside viewport
   const mw = 150, mh = 160;
@@ -2628,12 +2782,13 @@ function onMouseMove(e){
     }
   }
 
-  // POP face hover: highlight + pointer cursor
-  if(!isOrbiting && !isPanning && selectedObj && !isDraggingGizmo){
+  // POP face hover：降低卡頓，只在選到物件且沒有右鍵選單時才偵測四個貼圖面
+  if(!isOrbiting && !isPanning && selectedObj && !isDraggingGizmo && !document.getElementById('ctx-menu').classList.contains('show')){
     raycaster.setFromCamera(mouse, camera);
-    const popMeshes = [];
-    selectedObj.mesh.traverse(c=>{ if(c.isMesh && c.userData.isPOP) popMeshes.push(c); });
-    const hits = raycaster.intersectObjects(popMeshes, true);
+    const popMeshes = ['front','left','right','back']
+      .map(side => findPOPMeshBySide(selectedObj.mesh, side))
+      .filter(Boolean);
+    const hits = raycaster.intersectObjects(popMeshes, false);
     if(hits.length > 0){
       wrap.style.cursor = 'pointer';
       setPOPHover(hits[0].object);
@@ -2748,6 +2903,19 @@ function getDirectPOPInput(){
   return _directPOPInput;
 }
 
+
+function quickUploadPOP(side){
+  if(!selectedObj) return;
+  const input = getDirectPOPInput();
+  input.onchange = () => {
+    if(!selectedObj || !input.files[0]) return;
+    applyPOPToSide(input, side);
+    input.value = '';
+  };
+  input.click();
+}
+
+
 function triggerPOPUpload(side){
   const input = getDirectPOPInput();
   input.onchange = () => {
@@ -2791,7 +2959,7 @@ function restoreHistory(state){
   objects=[];
   deselectAll();
   state.forEach(s=>{
-    const item=ITEMS.find(i=>i.id===s.itemId);
+    const item=ITEMS.find(i=>i.id===s.itemId) || s.item;
     if(!item) return;
     const mesh=buildMesh(item, s.color);
     mesh.position.set(s.x,0,s.z);
@@ -2818,7 +2986,7 @@ function clearScene(){
 function saveScene(){
   const state={
     boothW, boothD, floorColor, wallColor, boothName,
-    objects: objects.map(o=>({id:o.id,itemId:o.item.id,color:o.color,x:o.x,z:o.z,rot:o.rot}))
+    objects: objects.map(o=>({id:o.id,itemId:o.item.id,item:o.item,color:o.color,x:o.x,z:o.z,rot:o.rot}))
   };
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -3645,6 +3813,232 @@ function setPageBg(color){
     scene.add(gridHelper);
   }
 }
+
+
+// ===================== CUSTOM IMAGE OBJECT =====================
+let customImageObjectDataUrl = null;
+let customImageObjectProcessedUrl = null;
+
+function showImageObjectPanel(){
+  document.getElementById('image-object-overlay').style.display = 'flex';
+}
+function closeImageObjectPanel(){
+  document.getElementById('image-object-overlay').style.display = 'none';
+}
+
+function loadCustomImageObject(input){
+  if(!input || !input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if(!file.type.startsWith('image/')){
+    alert('請選擇圖片檔案');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    customImageObjectDataUrl = e.target.result;
+    refreshCustomImagePreview();
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function processImageRemoveLightBg(dataUrl, callback){
+  const img = new Image();
+  img.onload = () => {
+    const maxSide = 2048;
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const cvs = document.createElement('canvas');
+    cvs.width = w; cvs.height = h;
+    const ctx = cvs.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const data = imageData.data;
+
+    // 取四角平均，估算背景色
+    const samples = [
+      [0,0], [w-1,0], [0,h-1], [w-1,h-1],
+      [Math.floor(w/2),0], [Math.floor(w/2),h-1]
+    ];
+    let br=0,bg=0,bb=0;
+    samples.forEach(([x,y])=>{
+      const i = (y*w+x)*4;
+      br += data[i]; bg += data[i+1]; bb += data[i+2];
+    });
+    br/=samples.length; bg/=samples.length; bb/=samples.length;
+
+    for(let i=0; i<data.length; i+=4){
+      const r=data[i], g=data[i+1], b=data[i+2];
+      const diff = Math.sqrt((r-br)*(r-br)+(g-bg)*(g-bg)+(b-bb)*(b-bb));
+      const lightness = (r+g+b)/3;
+      // 淺色背景 / 接近角落背景色 → 透明
+      if(diff < 42 || (lightness > 232 && Math.abs(r-g)<18 && Math.abs(g-b)<18)){
+        data[i+3] = 0;
+      }else if(diff < 70){
+        data[i+3] = Math.min(data[i+3], Math.round((diff-42)/(70-42)*255));
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    callback(cvs.toDataURL('image/png'));
+  };
+  img.onerror = () => callback(dataUrl);
+  img.src = dataUrl;
+}
+
+function refreshCustomImagePreview(){
+  if(!customImageObjectDataUrl) return;
+  const removeBg = document.getElementById('custom-img-remove-bg')?.checked;
+  const done = url => {
+    customImageObjectProcessedUrl = url;
+    const preview = document.getElementById('custom-img-preview');
+    if(preview) preview.src = url;
+    const wrap = document.getElementById('custom-img-preview-wrap');
+    if(wrap) wrap.style.display = 'flex';
+  };
+  if(removeBg){
+    processImageRemoveLightBg(customImageObjectDataUrl, done);
+  }else{
+    done(customImageObjectDataUrl);
+  }
+}
+
+function addCustomImageObjectToScene(){
+  if(!customImageObjectProcessedUrl){
+    alert('請先上傳圖片');
+    return;
+  }
+  const w = parseInt(document.getElementById('custom-img-w').value) || 80;
+  const h = parseInt(document.getElementById('custom-img-h').value) || 120;
+  const d = parseInt(document.getElementById('custom-img-d').value) || 1;
+
+  const item = {
+    id:'custom_image_' + Date.now(),
+    cat:'other',
+    name:'自訂圖片物件',
+    icon:'🖼',
+    w, d, h,
+    cost:0,
+    shape:'custom_image_plane',
+    color:'#ffffff',
+    imageUrl:customImageObjectProcessedUrl,
+    originalImageUrl:customImageObjectDataUrl,
+    tiltX:0,
+    tiltZ:0,
+    isCustomImageObject:true
+  };
+  startPlacing(item);
+  closeImageObjectPanel();
+}
+
+function buildCustomImageObjectMesh(item){
+  const group = new THREE.Group();
+  const w = item.w * U, h = item.h * U, d = Math.max((item.d || 1) * U, 0.05 * U);
+
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshBasicMaterial({
+    color:0xffffff,
+    transparent:true,
+    side:THREE.DoubleSide,
+    depthWrite:false
+  });
+  const plane = new THREE.Mesh(geo, mat);
+  plane.position.y = h/2;
+  plane.userData.isCustomImagePlane = true;
+  group.add(plane);
+
+  // 薄底座 / 厚度感
+  if((item.d || 0) > 0){
+    const edgeMat = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.12});
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), edgeMat);
+    edge.position.y = h/2;
+    edge.renderOrder = -1;
+    group.add(edge);
+  }
+
+  const img = new Image();
+  img.onload = () => {
+    const cvs = document.createElement('canvas');
+    const maxTex = 2048;
+    const scale = Math.min(1, maxTex / Math.max(img.naturalWidth, img.naturalHeight));
+    cvs.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    cvs.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    cvs.getContext('2d').drawImage(img, 0, 0, cvs.width, cvs.height);
+
+    const tex = new THREE.CanvasTexture(cvs);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+
+    plane.material = new THREE.MeshBasicMaterial({
+      map:tex,
+      transparent:true,
+      side:THREE.DoubleSide,
+      depthWrite:false
+    });
+    plane.material.needsUpdate = true;
+  };
+  img.src = item.imageUrl;
+
+  group.rotation.x = (item.tiltX || 0) * Math.PI / 180;
+  group.rotation.z = (item.tiltZ || 0) * Math.PI / 180;
+  group.userData.customImageUrl = item.imageUrl;
+  return group;
+}
+
+function updateImageObjectProp(type, val){
+  if(!selectedObj || !selectedObj.item?.isCustomImageObject) return;
+  val = parseFloat(val);
+  if(isNaN(val)) return;
+
+  if(type === 'w') selectedObj.item.w = Math.max(5, val);
+  if(type === 'h') selectedObj.item.h = Math.max(5, val);
+  if(type === 'tiltX') selectedObj.item.tiltX = val;
+  if(type === 'tiltZ') selectedObj.item.tiltZ = val;
+
+  const oldPos = selectedObj.mesh.position.clone();
+  const oldRotY = selectedObj.rot;
+  const newMesh = buildMesh(selectedObj.item, selectedObj.color);
+  newMesh.position.copy(oldPos);
+  newMesh.rotation.y = oldRotY;
+  scene.remove(selectedObj.mesh);
+  scene.add(newMesh);
+  selectedObj.mesh = newMesh;
+  selectObject(selectedObj);
+  saveHistory();
+}
+
+function replaceSelectedImageObject(){
+  if(!selectedObj || !selectedObj.item?.isCustomImageObject) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      selectedObj.item.originalImageUrl = ev.target.result;
+      selectedObj.item.imageUrl = ev.target.result;
+      const oldPos = selectedObj.mesh.position.clone();
+      const oldRotY = selectedObj.rot;
+      const newMesh = buildMesh(selectedObj.item, selectedObj.color);
+      newMesh.position.copy(oldPos);
+      newMesh.rotation.y = oldRotY;
+      scene.remove(selectedObj.mesh);
+      scene.add(newMesh);
+      selectedObj.mesh = newMesh;
+      selectObject(selectedObj);
+      saveHistory();
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
 
 // ===================== CUSTOM STEEL TABLE =====================
 const STEEL_STORAGE_KEY = 'wangsi_custom_steel_specs';
