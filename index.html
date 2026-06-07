@@ -198,6 +198,7 @@
   <!-- CANVAS -->
   <div id="canvas-wrap">
     <div id="canvas-bg-layer"></div>
+    <img id="canvas-bg-img" alt="空間背景" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;z-index:0;display:none;pointer-events:none;">
     <canvas id="three-canvas"></canvas>
     <div id="placing-indicator">點擊場景放置｜ESC 取消</div>
     <div id="hint-bar">左鍵旋轉｜右鍵平移｜滾輪縮放</div>
@@ -2781,6 +2782,7 @@ function loadNotionBoothPhoto(input){
   reader.onload = e => {
     notionBoothPhotoUrl = e.target.result;
     spacePhotoDataUrl = notionBoothPhotoUrl;
+    forceShowSpacePhoto(notionBoothPhotoUrl);
 
     safeSetDisplay('si-photo-preview', 'block');
     const preview = safeEl('si-photo-preview-img');
@@ -2828,7 +2830,26 @@ function applyNotionBooth(){
 function forceShowSpacePhoto(dataUrl){
   if(!dataUrl) return;
 
-  const bg = getBgLayer ? getBgLayer() : document.getElementById('canvas-bg-layer');
+  // 1) 真正的 img 背景層：最穩定，不依賴 background-image
+  let imgLayer = document.getElementById('canvas-bg-img');
+  const wrap = document.getElementById('canvas-wrap');
+  if(!imgLayer && wrap){
+    imgLayer = document.createElement('img');
+    imgLayer.id = 'canvas-bg-img';
+    imgLayer.alt = '空間背景';
+    imgLayer.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center center;z-index:0;display:none;pointer-events:none;';
+    const canvas = document.getElementById('three-canvas');
+    wrap.insertBefore(imgLayer, canvas || wrap.firstChild);
+  }
+  if(imgLayer){
+    imgLayer.src = dataUrl;
+    imgLayer.style.display = 'block';
+    imgLayer.style.opacity = '1';
+    imgLayer.style.zIndex = '0';
+  }
+
+  // 2) 同時保留 CSS background-image 作為備援
+  const bg = document.getElementById('canvas-bg-layer');
   if(bg){
     bg.style.display = 'block';
     bg.style.opacity = '1';
@@ -2837,15 +2858,17 @@ function forceShowSpacePhoto(dataUrl){
     bg.style.backgroundPosition = 'center center';
     bg.style.backgroundRepeat = 'no-repeat';
     bg.style.zIndex = '0';
+    bg.style.pointerEvents = 'none';
   }
 
+  // 3) canvas 必須透明並在背景上方
   const canvas = document.getElementById('three-canvas');
   if(canvas){
     canvas.style.background = 'transparent';
     canvas.style.zIndex = '1';
   }
 
-  // 讓 Three.js 背景透明，避免蓋住照片
+  // 4) Three.js 透明背景
   if(scene){
     scene.background = null;
     scene.fog = null;
@@ -2854,40 +2877,30 @@ function forceShowSpacePhoto(dataUrl){
     renderer.setClearColor(0x000000, 0);
   }
 
-  // 讓原本 3D 空間牆面、地板變透明/半透明，照片才看得到
+  // 5) 牆面 / 地板透明，不要遮住照片
   if(floorMesh){
-    floorMesh.material = new THREE.MeshLambertMaterial({
+    floorMesh.material = new THREE.MeshBasicMaterial({
       color:0xffffff,
       transparent:true,
-      opacity:0.04,
+      opacity:0.0,
       depthWrite:false
     });
+    floorMesh.visible = false;
   }
   if(wallBack){
-    wallBack.material = new THREE.MeshLambertMaterial({
-      color:0xffffff,
-      transparent:true,
-      opacity:0.0,
-      depthWrite:false
-    });
+    wallBack.material = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, depthWrite:false});
+    wallBack.visible = false;
   }
   if(wallLeft){
-    wallLeft.material = new THREE.MeshLambertMaterial({
-      color:0xffffff,
-      transparent:true,
-      opacity:0.0,
-      depthWrite:false
-    });
+    wallLeft.material = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, depthWrite:false});
+    wallLeft.visible = false;
   }
   if(wallRight){
-    wallRight.material = new THREE.MeshLambertMaterial({
-      color:0xffffff,
-      transparent:true,
-      opacity:0.0,
-      depthWrite:false
-    });
+    wallRight.material = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, depthWrite:false});
+    wallRight.visible = false;
   }
   if(gridHelper) gridHelper.visible = false;
+  if(labelMesh) labelMesh.visible = false;
 
   spaceBgMode = '2d';
   spaceBgVisible = true;
@@ -2898,12 +2911,9 @@ function forceShowSpacePhoto(dataUrl){
     btnToggle.style.display = '';
     btnToggle.textContent = '👁 隱藏背景';
   }
-  if(btnMode){
-    btnMode.style.display = '';
-  }
+  if(btnMode) btnMode.style.display = '';
   if(typeof updateBgModeBtn === 'function') updateBgModeBtn();
 
-  // 重新渲染一次
   if(renderer && scene && camera) renderer.render(scene, camera);
 }
 
@@ -3211,21 +3221,25 @@ function applySpaceTo2D(){
 
 function toggleSpaceBg(){
   spaceBgVisible = !spaceBgVisible;
-  const btn = document.getElementById('btn-bg-toggle');
-  if(spaceBgMode === '2d'){
-    const canvas = document.getElementById('canvas-wrap');
-    getBgLayer().style.backgroundImage = spaceBgVisible ? `url(${spacePhotoDataUrl})` : 'none';
-    renderer.setClearColor(spaceBgVisible ? 0x000000 : 0x1a1410, spaceBgVisible ? 0 : 1);
-  } else {
-    // 3D mode: show/hide wall texture
-    if(wallBack){
-      wallBack.material = spaceBgVisible && spaceWallTex
-        ? new THREE.MeshLambertMaterial({map: spaceWallTex})
-        : new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
-    }
+  const bg = getBgLayer();
+  const img = document.getElementById('canvas-bg-img');
+
+  if(spaceBgVisible){
+    if(bg) bg.style.display = 'block';
+    if(img) img.style.display = 'block';
+    scene.background = null;
+    scene.fog = null;
+    renderer.setClearColor(0x000000, 0);
+    document.getElementById('btn-bg-toggle').textContent = '👁 隱藏背景';
+  }else{
+    if(bg) bg.style.display = 'none';
+    if(img) img.style.display = 'none';
+    scene.background = new THREE.Color(0x1a1410);
+    renderer.setClearColor(0x1a1410, 1);
+    document.getElementById('btn-bg-toggle').textContent = '👁 顯示背景';
   }
-  btn.textContent = spaceBgVisible ? '👁 隱藏背景' : '👁 顯示背景';
 }
+
 
 function toggleBgMode(){
   const canvas = document.getElementById('canvas-wrap');
