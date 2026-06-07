@@ -304,9 +304,9 @@
               </label>
               <button class="action-btn" style="margin-top:4px;" onclick="clearPOPSide('front')">✕ 清除</button>
             </div>
-            <!-- 桌子：三面 -->
+            <!-- 四面圖片上傳 -->
             <div id="pop-multi" style="display:none;display:flex;flex-direction:column;gap:5px;">
-              <div style="font-size:10px;color:var(--text3);margin-bottom:2px;">三面各自上傳，未上傳的面透明</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:2px;">四面各自上傳，未上傳的面透明</div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <span style="font-size:11px;color:var(--text2);width:28px;flex-shrink:0;">正面</span>
                 <label style="flex:1;background:var(--panel2);border:1px dashed var(--accent);border-radius:5px;padding:5px 6px;text-align:center;cursor:pointer;font-size:10px;color:var(--accent);" id="pop-label-front">
@@ -327,6 +327,13 @@
                   🖼 上傳<input type="file" accept="image/*" style="display:none;" onchange="applyPOPToSide(this,'right')">
                 </label>
                 <button onclick="clearPOPSide('right')" style="background:transparent;border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text3);font-size:10px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">✕</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;color:var(--text2);width:28px;flex-shrink:0;">背面</span>
+                <label style="flex:1;background:var(--panel2);border:1px dashed var(--accent);border-radius:5px;padding:5px 6px;text-align:center;cursor:pointer;font-size:10px;color:var(--accent);" id="pop-label-back">
+                  🖼 上傳<input type="file" accept="image/*" style="display:none;" onchange="applyPOPToSide(this,'back')">
+                </label>
+                <button onclick="clearPOPSide('back')" style="background:transparent;border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text3);font-size:10px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">✕</button>
               </div>
             </div>
           </div>
@@ -972,6 +979,73 @@ function changeWall(){
 }
 
 // ===================== OBJECT BUILDING =====================
+
+function makeBlankPOPMaterial(){
+  return new THREE.MeshBasicMaterial({
+    color:0xffffff,
+    transparent:true,
+    opacity:0.0,
+    side:THREE.DoubleSide
+  });
+}
+
+function findExistingPOPSide(group, side){
+  let found = null;
+  group.traverse(c => {
+    if(c.userData && c.userData.isPOP && c.userData.popSide === side) found = c;
+  });
+  return found;
+}
+
+function ensureFourSidePOP(group, item, w, d, h){
+  const allowedCats = ['cake_fridge','chest_freezer','upright_fridge','steeltable','shelving','backwall','other'];
+  if(!item || !allowedCats.includes(item.cat)) return;
+
+  const eps = 0.9 * U;
+  const faceH = Math.max(h * 0.96, 8 * U);
+  const frontW = Math.max(w * 0.98, 8 * U);
+  const sideW = Math.max(d * 0.98, 8 * U);
+
+  function addOrGet(side){
+    const existing = findExistingPOPSide(group, side);
+    if(existing) return existing;
+
+    let geo, mesh;
+    if(side === 'front'){
+      geo = new THREE.PlaneGeometry(frontW, faceH);
+      mesh = new THREE.Mesh(geo, makeBlankPOPMaterial());
+      mesh.position.set(0, faceH/2, d/2 + eps);
+    }else if(side === 'back'){
+      geo = new THREE.PlaneGeometry(frontW, faceH);
+      mesh = new THREE.Mesh(geo, makeBlankPOPMaterial());
+      mesh.position.set(0, faceH/2, -d/2 - eps);
+      mesh.rotation.y = Math.PI;
+    }else if(side === 'left'){
+      geo = new THREE.PlaneGeometry(sideW, faceH);
+      mesh = new THREE.Mesh(geo, makeBlankPOPMaterial());
+      mesh.position.set(-w/2 - eps, faceH/2, 0);
+      mesh.rotation.y = Math.PI/2;
+    }else if(side === 'right'){
+      geo = new THREE.PlaneGeometry(sideW, faceH);
+      mesh = new THREE.Mesh(geo, makeBlankPOPMaterial());
+      mesh.position.set(w/2 + eps, faceH/2, 0);
+      mesh.rotation.y = -Math.PI/2;
+    }
+    mesh.userData.isPOP = true;
+    mesh.userData.popSide = side;
+    mesh.renderOrder = 20;
+    group.add(mesh);
+    return mesh;
+  }
+
+  group.userData.popFront = addOrGet('front');
+  group.userData.popLeft  = addOrGet('left');
+  group.userData.popRight = addOrGet('right');
+  group.userData.popBack  = addOrGet('back');
+  group.userData.popMesh  = group.userData.popFront;
+}
+
+
 function buildMesh(item, color){
   color = color || item.color;
   const mat = new THREE.MeshLambertMaterial({color: new THREE.Color(color)});
@@ -1468,7 +1542,7 @@ function buildMesh(item, color){
       body.position.y = h/2; body.castShadow=true; body.receiveShadow=true;
       group.add(body);
 
-      // ── 三面 POP 輸出物貼面 ──
+      // ── 四面 POP 輸出物貼面 ──
       const popMatBlank = () => new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, side:THREE.DoubleSide});
 
       // 正面 (前)
@@ -1571,6 +1645,7 @@ function buildMesh(item, color){
     }
   }
 
+  ensureFourSidePOP(group, item, w, d, h);
   group.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; } });
   return group;
 }
@@ -1782,6 +1857,7 @@ function finalizePlacing(pos){
     popFront: placingMesh.userData.popFront,
     popLeft:  placingMesh.userData.popLeft,
     popRight: placingMesh.userData.popRight,
+    popBack:  placingMesh.userData.popBack,
     // legacy alias
     popMesh:  placingMesh.userData.popFront,
   };
@@ -1834,7 +1910,7 @@ function applyPOPToSide(input, side){
       tex.needsUpdate = true;
       const popMesh = findPOPMeshBySide(selectedObj.mesh, side);
       if(popMesh){
-        popMesh.material = new THREE.MeshBasicMaterial({map: tex, side: THREE.FrontSide, transparent: false});
+        popMesh.material = new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide, transparent: false});
         popMesh.material.needsUpdate = true;
         popMesh.userData.hasPOP = true;
         const lbl = document.getElementById('pop-label-' + side);
@@ -1854,7 +1930,7 @@ function clearPOPSide(side){
   if(!selectedObj) return;
   const popMesh = findPOPMeshBySide(selectedObj.mesh, side);
   if(popMesh){
-    popMesh.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0, side:THREE.FrontSide});
+    popMesh.material = makeBlankPOPMaterial();
     popMesh.userData.hasPOP = false;
   }
   const lbl = document.getElementById('pop-label-' + side);
@@ -1984,17 +2060,15 @@ function selectObject(obj){
   document.getElementById('prop-x').value = Math.round(obj.x/U);
   document.getElementById('prop-z').value = Math.round(obj.z/U);
   document.getElementById('prop-rot').value = Math.round(obj.rot*180/Math.PI);
-  // show POP panel — fridge=single face, table=three faces
-  const isMultiPOP = ['cake_square','cake_jewel','cake_desktop','steel_table','chest'].includes(obj.item.shape);
-  const isSinglePOP = obj.item.shape === 'cylinder';
-  const isBackwall = obj.item.shape === 'backwall';
-  const hasPOP     = isMultiPOP || isSinglePOP || isBackwall;
-  document.getElementById('pop-panel').style.display  = hasPOP       ? 'block' : 'none';
-  document.getElementById('pop-single').style.display = (isSinglePOP||isBackwall) ? 'block' : 'none';
-  document.getElementById('pop-multi').style.display  = isMultiPOP   ? 'flex'  : 'none';
-  // reset label highlights for multi-face
-  if(isMultiPOP){
-    ['front','left','right'].forEach(side=>{
+  // show POP panel — 冰箱 / 桌子 / 背板 / 道具 / 層架統一四面上傳
+  const popCats = ['cake_fridge','chest_freezer','upright_fridge','steeltable','shelving','backwall','other'];
+  const hasPOP = popCats.includes(obj.item.cat);
+  document.getElementById('pop-panel').style.display  = hasPOP ? 'block' : 'none';
+  document.getElementById('pop-single').style.display = 'none';
+  document.getElementById('pop-multi').style.display  = hasPOP ? 'flex' : 'none';
+  // reset label highlights for four-face
+  if(hasPOP){
+    ['front','left','right','back'].forEach(side=>{
       const lbl = document.getElementById('pop-label-'+side);
       if(lbl){
         const hasTex = findPOPMeshBySide(obj.mesh, side)?.userData?.hasPOP;
@@ -2345,6 +2419,7 @@ function ctxDuplicate(){
     popFront: newMesh.userData.popFront,
     popLeft:  newMesh.userData.popLeft,
     popRight: newMesh.userData.popRight,
+    popBack:  newMesh.userData.popBack,
   };
   scene.add(newMesh);
   objects.push(obj);
@@ -2417,6 +2492,7 @@ function applyResize(){
     popFront: newMesh.userData.popFront,
     popLeft:  newMesh.userData.popLeft,
     popRight: newMesh.userData.popRight,
+    popBack:  newMesh.userData.popBack,
   };
   scene.remove(obj.mesh);
   scene.add(newMesh);
