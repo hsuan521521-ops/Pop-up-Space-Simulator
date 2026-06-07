@@ -175,6 +175,7 @@
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="exportImage()">📷 截圖</button>
   <button class="tb-btn" onclick="showComposite()">🏙 場景合成</button>
+  <button class="tb-btn" onclick="showCompositePro()" style="border-color:#7aabb8;color:#7aabb8;">📐 合成 Pro</button>
   <button class="tb-btn" style="border-color:var(--accent);color:var(--accent);" onclick="showAIPanel()">✦ AI 掃描物品</button>
   <button class="tb-btn" onclick="saveScene()">💾 存檔</button>
   <button class="tb-btn" onclick="loadScene()">📂 讀檔</button>
@@ -412,6 +413,59 @@
           <canvas id="composite-canvas" style="max-width:100%;max-height:100%;border-radius:6px;"></canvas>
         </div>
         <div id="comp-hint" style="font-size:10px;color:var(--text3);text-align:center;">請先上傳場景圖</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCENE COMPOSITE PRO MODAL -->
+<div id="composite-pro-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:230;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;width:min(1180px,96vw);max-height:94vh;display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <h3 style="font-size:16px;font-family:'Playfair Display',serif;color:var(--accent2);margin:0;">📐 場景合成 Pro｜四點透視校正</h3>
+        <div id="pro-status" style="font-size:11px;color:var(--text3);margin-top:4px;">上傳現場照片與模擬圖，分別點 4 個對應點後合成。</div>
+      </div>
+      <button onclick="closeCompositePro()" style="background:transparent;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;min-height:0;">
+      <div style="display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:78vh;padding-right:4px;">
+        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">1. 上傳圖片</div>
+          <label style="display:block;background:var(--panel);border:1.5px dashed var(--border);border-radius:7px;padding:12px;text-align:center;cursor:pointer;font-size:12px;color:var(--text2);">
+            🏙 上傳現場照片
+            <input type="file" accept="image/*" style="display:none;" onchange="proLoadImage(this,'bg')">
+          </label>
+          <label style="display:block;background:var(--panel);border:1.5px dashed var(--border);border-radius:7px;padding:12px;text-align:center;cursor:pointer;font-size:12px;color:var(--text2);">
+            🧊 上傳模擬圖 / SketchUp 圖
+            <input type="file" accept="image/*" style="display:none;" onchange="proLoadImage(this,'overlay')">
+          </label>
+          <button onclick="proUseCurrentScene()" style="padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">使用目前 3D 畫面作為模擬圖</button>
+        </div>
+
+        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">2. 標記四點</div>
+          <button id="pro-btn-bg" onclick="proSetPickMode('bg')" style="padding:8px;background:var(--accent);border:none;border-radius:6px;color:#1a1410;font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">A. 點現場照片 4 點</button>
+          <button id="pro-btn-overlay" onclick="proSetPickMode('overlay')" style="padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">B. 點模擬圖 4 點</button>
+          <button onclick="proUndoPoint()" style="padding:7px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">↩ 移除上一點</button>
+          <button onclick="proClearPoints()" style="padding:7px;background:transparent;border:1px solid var(--red);border-radius:6px;color:var(--red);font-size:12px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">清除四點</button>
+          <div style="font-size:11px;color:var(--text3);line-height:1.6;">建議順序：左前角 → 右前角 → 右後角 → 左後角。兩張圖要用相同順序。</div>
+        </div>
+
+        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">3. 融合輸出</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;font-size:11px;color:var(--text2);">
+            <span>透明度</span><input type="range" id="pro-opacity" min="10" max="100" value="85" oninput="proRender()">
+            <span>羽化</span><input type="range" id="pro-feather" min="0" max="30" value="4" oninput="proRender()">
+          </div>
+          <button onclick="proRender(true)" style="padding:8px;background:var(--blue);border:none;border-radius:6px;color:#081014;font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">✨ 產生透視合成</button>
+          <button onclick="proDownload()" style="padding:9px;background:var(--accent);border:none;border-radius:6px;color:#1a1410;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans TC',sans-serif;">⬇ 下載 Pro 合成 PNG</button>
+        </div>
+      </div>
+
+      <div style="background:#111;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;min-height:520px;overflow:hidden;position:relative;">
+        <canvas id="pro-canvas" style="max-width:100%;max-height:78vh;border-radius:6px;cursor:crosshair;"></canvas>
       </div>
     </div>
   </div>
@@ -2814,14 +2868,25 @@ function applyNotionBooth(){
   document.getElementById('booth-w-input').value = boothW;
   document.getElementById('booth-d-input').value = boothD;
 
-  buildBooth(); resetView();
+  buildBooth();
+  resetView();
 
-  // 永遠生成空間示意背景
-  generateBoothSceneBg(selectedNotionBooth, boothW, boothD);
   document.getElementById('btn-bg-toggle').style.display = '';
   document.getElementById('btn-bg-mode').style.display = '';
   spaceBgMode = '2d';
   spaceBgVisible = true;
+
+  // 若此 Notion 地點已上傳現場照片，優先顯示真實照片；不要再用示意背景覆蓋。
+  if(notionBoothPhotoUrl){
+    spacePhotoDataUrl = notionBoothPhotoUrl;
+    forceShowSpacePhoto(notionBoothPhotoUrl);
+  }else{
+    generateBoothSceneBg(selectedNotionBooth, boothW, boothD);
+    scene.background = null;
+    scene.fog = null;
+    renderer.setClearColor(0x000000, 0);
+  }
+
   updateBgModeBtn();
   closeSpaceImport();
 }
@@ -3026,30 +3091,41 @@ function generateBoothSceneBg(booth, bw, bd){
   spaceBgVisible = true;
 
   const canvasWrap = document.getElementById('canvas-wrap');
-  getBgLayer().style.backgroundImage = `url(${dataUrl})`;
-
-
+  const bg = getBgLayer();
+  if(bg){
+    bg.style.display = 'block';
+    bg.style.backgroundImage = `url(${dataUrl})`;
+    bg.style.backgroundSize = 'cover';
+    bg.style.backgroundPosition = 'center center';
+  }
+  const bgImg = document.getElementById('canvas-bg-img');
+  if(bgImg){
+    bgImg.src = dataUrl;
+    bgImg.style.display = 'block';
+  }
+  scene.background = null;
+  scene.fog = null;
   renderer.setClearColor(0x000000, 0);
 }
 
 function loadSpacePhoto(input){
-  if(!input.files[0]) return;
+  if(!input.files || !input.files[0]) return;
   const reader = new FileReader();
   reader.onload = e => {
     spacePhotoDataUrl = e.target.result;
-    // Show preview
+    forceShowSpacePhoto(spacePhotoDataUrl);
+
     const img = document.getElementById('space-preview-img');
-    img.src = spacePhotoDataUrl;
-    const wrap = document.getElementById('space-preview-wrap');
-    wrap.style.display = 'flex';
-    // Start AI analysis
-    document.getElementById('space-analyze-section').style.display = 'block';
-    document.getElementById('space-dims-form').style.display = 'none';
-    document.getElementById('space-ai-status').style.display = 'flex';
-    document.getElementById('space-ai-msg').textContent = 'AI 分析空間尺寸中...';
+    if(img) img.src = spacePhotoDataUrl;
+    safeSetDisplay('space-preview-wrap', 'flex');
+    safeSetDisplay('space-analyze-section', 'block');
+    safeSetDisplay('space-dims-form', 'none');
+    safeSetDisplay('space-ai-status', 'flex');
+    safeSetText('space-ai-msg', '讀取照片並建立本機估算資料中...');
     analyzeSpaceWithAI(spacePhotoDataUrl);
   };
   reader.readAsDataURL(input.files[0]);
+  input.value = '';
 }
 
 
@@ -3175,18 +3251,16 @@ function applySpaceImport(){
   document.getElementById('booth-w-input').value = boothW;
   document.getElementById('booth-d-input').value = boothD;
 
-  // Apply photo as background
+  // Apply photo as background. 先重建空間，再把照片強制放回背景層，避免 buildBooth() 把透明設定洗掉。
   const img = new Image();
   img.onload = ()=>{
     spaceBg2dImg = img;
-    if(spaceBgMode === '3d'){
-      applySpaceTo3D(img, h);
-    } else {
-      applySpaceTo2D();
-    }
     buildBooth();
     resetView();
-    // Show toggle buttons
+    if(spaceBgMode === '3d'){
+      applySpaceTo3D(img, h);
+    }
+    forceShowSpacePhoto(spacePhotoDataUrl);
     document.getElementById('btn-bg-toggle').style.display='';
     document.getElementById('btn-bg-mode').style.display='';
     updateBgModeBtn();
@@ -3212,10 +3286,7 @@ function applySpaceTo3D(img, ceilH){
 }
 
 function applySpaceTo2D(){
-  // 2D mode: photo as CSS background behind canvas
-  const canvas = document.getElementById('canvas-wrap');
-  getBgLayer().style.backgroundImage = `url(${spacePhotoDataUrl})`;
-  renderer.setClearColor(0x000000, 0); // transparent renderer
+  forceShowSpacePhoto(spacePhotoDataUrl);
   spaceBgVisible = true;
 }
 
@@ -3776,6 +3847,290 @@ function downloadComposite(){
     };
     bImg.src = boothSnapshotDataURL;
   }
+}
+
+
+// ===================== SCENE COMPOSITE PRO =====================
+let proBgImg = null;
+let proOverlayImg = null;
+let proPickMode = 'bg';
+let proViewMode = 'bg';
+let proBgPts = [];
+let proOverlayPts = [];
+let proLastRenderDataURL = null;
+
+function showCompositePro(){
+  document.getElementById('composite-pro-overlay').style.display = 'flex';
+  if(!proOverlayImg){ proUseCurrentScene(false); }
+  proSetPickMode('bg');
+  proRenderBase();
+}
+function closeCompositePro(){
+  document.getElementById('composite-pro-overlay').style.display = 'none';
+}
+function proSetStatus(msg){ const el=document.getElementById('pro-status'); if(el) el.textContent=msg; }
+
+function proLoadImage(input, type){
+  if(!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => proSetImage(type, e.target.result);
+  reader.readAsDataURL(input.files[0]);
+  input.value = '';
+}
+function proSetImage(type, dataUrl){
+  const img = new Image();
+  img.onload = () => {
+    if(type === 'bg'){
+      proBgImg = img;
+      proBgPts = [];
+      proSetPickMode('bg');
+      proSetStatus('現場照片已載入，請點現場照片 4 個對應點。');
+    }else{
+      proOverlayImg = img;
+      proOverlayPts = [];
+      proSetPickMode('overlay');
+      proSetStatus('模擬圖已載入，請點模擬圖 4 個對應點。');
+    }
+    proRenderBase();
+  };
+  img.src = dataUrl;
+}
+function proUseCurrentScene(showMsg=true){
+  if(renderer && scene && camera){
+    renderer.render(scene, camera);
+    const data = renderer.domElement.toDataURL('image/png');
+    const img = new Image();
+    img.onload = () => {
+      proOverlayImg = img;
+      proOverlayPts = [];
+      if(showMsg) proSetStatus('已使用目前 3D 畫面作為模擬圖，請標記模擬圖 4 點。');
+      proRenderBase();
+    };
+    img.src = data;
+  }
+}
+function proSetPickMode(mode){
+  proPickMode = mode;
+  proViewMode = mode;
+  const b1 = document.getElementById('pro-btn-bg');
+  const b2 = document.getElementById('pro-btn-overlay');
+  if(b1){ b1.style.background = mode==='bg' ? 'var(--accent)' : 'var(--panel)'; b1.style.color = mode==='bg' ? '#1a1410' : 'var(--text2)'; b1.style.border = mode==='bg' ? 'none' : '1px solid var(--border)'; }
+  if(b2){ b2.style.background = mode==='overlay' ? 'var(--accent)' : 'var(--panel)'; b2.style.color = mode==='overlay' ? '#1a1410' : 'var(--text2)'; b2.style.border = mode==='overlay' ? 'none' : '1px solid var(--border)'; }
+  proRenderBase();
+}
+function proCurrentImage(){ return proViewMode === 'overlay' ? proOverlayImg : proBgImg; }
+function proCurrentPts(){ return proPickMode === 'overlay' ? proOverlayPts : proBgPts; }
+function proRenderBase(){
+  const cvs = document.getElementById('pro-canvas');
+  if(!cvs) return;
+  const ctx = cvs.getContext('2d');
+  const img = proCurrentImage();
+  if(!img){
+    cvs.width = 760; cvs.height = 520;
+    ctx.fillStyle = '#181818'; ctx.fillRect(0,0,cvs.width,cvs.height);
+    ctx.fillStyle = '#777'; ctx.font = '15px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(proViewMode==='bg' ? '請先上傳現場照片' : '請先上傳模擬圖', cvs.width/2, cvs.height/2);
+    return;
+  }
+  const maxW = 820, maxH = 620;
+  const r = Math.min(maxW/img.naturalWidth, maxH/img.naturalHeight, 1);
+  cvs.width = Math.max(1, Math.round(img.naturalWidth*r));
+  cvs.height = Math.max(1, Math.round(img.naturalHeight*r));
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+
+  const pts = proViewMode === 'overlay' ? proOverlayPts : proBgPts;
+  proDrawPoints(ctx, pts, r, proViewMode==='overlay'?'模擬圖':'現場');
+  if(proBgImg && proOverlayImg && proBgPts.length===4 && proOverlayPts.length===4){
+    proSetStatus('四點已完成，可按「產生透視合成」。');
+  }else{
+    proSetStatus(`${proViewMode==='overlay'?'模擬圖':'現場照片'}：已標 ${pts.length}/4 點`);
+  }
+}
+function proDrawPoints(ctx, pts, scale, label){
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#ff4444';
+  ctx.fillStyle = 'rgba(255,68,68,.18)';
+  if(pts.length > 1){
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x*scale, pts[0].y*scale);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x*scale, pts[i].y*scale);
+    if(pts.length===4) ctx.closePath();
+    ctx.stroke();
+    if(pts.length===4) ctx.fill();
+  }
+  pts.forEach((p,i)=>{
+    const x=p.x*scale, y=p.y*scale;
+    ctx.beginPath(); ctx.arc(x,y,10,0,Math.PI*2); ctx.fillStyle='#ff4444'; ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(String(i+1),x,y);
+  });
+  ctx.restore();
+}
+
+(function setupProCanvasClick(){
+  setTimeout(()=>{
+    const cvs = document.getElementById('pro-canvas');
+    if(!cvs || cvs.dataset.bound) return;
+    cvs.dataset.bound = '1';
+    cvs.addEventListener('click', e=>{
+      const img = proCurrentImage();
+      if(!img) return;
+      const rect = cvs.getBoundingClientRect();
+      const scaleX = cvs.width / rect.width;
+      const scaleY = cvs.height / rect.height;
+      const cx = (e.clientX - rect.left) * scaleX;
+      const cy = (e.clientY - rect.top) * scaleY;
+      const naturalScale = img.naturalWidth / cvs.width;
+      const pts = proCurrentPts();
+      if(pts.length >= 4) pts.length = 0;
+      pts.push({x: cx*naturalScale, y: cy*naturalScale});
+      if(proPickMode==='bg' && pts.length===4 && proOverlayImg){ proSetPickMode('overlay'); }
+      else if(proPickMode==='overlay' && pts.length===4){ proRender(true); }
+      else proRenderBase();
+    });
+  }, 0);
+})();
+
+function proUndoPoint(){
+  const pts = proCurrentPts();
+  pts.pop();
+  proRenderBase();
+}
+function proClearPoints(){
+  if(proPickMode==='bg') proBgPts = [];
+  else proOverlayPts = [];
+  proRenderBase();
+}
+
+function proGetHomography(src, dst){
+  // Solve 8x8 linear system mapping src -> dst.
+  const A=[], b=[];
+  for(let i=0;i<4;i++){
+    const x=src[i].x, y=src[i].y, X=dst[i].x, Y=dst[i].y;
+    A.push([x,y,1,0,0,0,-X*x,-X*y]); b.push(X);
+    A.push([0,0,0,x,y,1,-Y*x,-Y*y]); b.push(Y);
+  }
+  const h = proSolveLinear(A,b);
+  return [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
+}
+function proSolveLinear(A,b){
+  const n=8;
+  const M=A.map((row,i)=>row.concat([b[i]]));
+  for(let col=0; col<n; col++){
+    let pivot=col;
+    for(let r=col+1; r<n; r++) if(Math.abs(M[r][col])>Math.abs(M[pivot][col])) pivot=r;
+    const tmp=M[col]; M[col]=M[pivot]; M[pivot]=tmp;
+    const div=M[col][col] || 1e-12;
+    for(let c=col;c<=n;c++) M[col][c]/=div;
+    for(let r=0;r<n;r++){
+      if(r===col) continue;
+      const f=M[r][col];
+      for(let c=col;c<=n;c++) M[r][c]-=f*M[col][c];
+    }
+  }
+  return M.map(row=>row[n]);
+}
+function proInvert3(m){
+  const [a,b,c,d,e,f,g,h,i]=m;
+  const A=e*i-f*h, B=c*h-b*i, C=b*f-c*e;
+  const D=f*g-d*i, E=a*i-c*g, F=c*d-a*f;
+  const G=d*h-e*g, H=b*g-a*h, I=a*e-b*d;
+  const det=a*A+b*D+c*G || 1e-12;
+  return [A/det,B/det,C/det,D/det,E/det,F/det,G/det,H/det,I/det];
+}
+function proPointInQuad(x,y,q){
+  let inside=false;
+  for(let i=0,j=q.length-1;i<q.length;j=i++){
+    const xi=q[i].x, yi=q[i].y, xj=q[j].x, yj=q[j].y;
+    const intersect=((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi+1e-12)+xi);
+    if(intersect) inside=!inside;
+  }
+  return inside;
+}
+function proWarpDraw(ctx, srcImg, srcPts, dstPts, outScale=1, opacity=0.85){
+  // Draw source image into offscreen at natural resolution.
+  const sw = srcImg.naturalWidth, sh = srcImg.naturalHeight;
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = sw; srcCanvas.height = sh;
+  const sctx = srcCanvas.getContext('2d');
+  sctx.drawImage(srcImg, 0, 0);
+  const srcData = sctx.getImageData(0,0,sw,sh).data;
+  const H = proGetHomography(srcPts, dstPts);
+  const inv = proInvert3(H);
+  const minX=Math.max(0,Math.floor(Math.min(...dstPts.map(p=>p.x))*outScale));
+  const maxX=Math.min(ctx.canvas.width-1,Math.ceil(Math.max(...dstPts.map(p=>p.x))*outScale));
+  const minY=Math.max(0,Math.floor(Math.min(...dstPts.map(p=>p.y))*outScale));
+  const maxY=Math.min(ctx.canvas.height-1,Math.ceil(Math.max(...dstPts.map(p=>p.y))*outScale));
+  const imgData = ctx.getImageData(minX,minY,Math.max(1,maxX-minX+1),Math.max(1,maxY-minY+1));
+  const data=imgData.data, w=imgData.width, h=imgData.height;
+  const quadScaled = dstPts.map(p=>({x:p.x*outScale,y:p.y*outScale}));
+  const feather = parseInt(document.getElementById('pro-feather')?.value || '0');
+  for(let yy=0; yy<h; yy++){
+    const Y=minY+yy;
+    for(let xx=0; xx<w; xx++){
+      const X=minX+xx;
+      if(!proPointInQuad(X,Y,quadScaled)) continue;
+      const dx = X/outScale, dy = Y/outScale;
+      const den = inv[6]*dx + inv[7]*dy + inv[8];
+      const sx = (inv[0]*dx + inv[1]*dy + inv[2]) / den;
+      const sy = (inv[3]*dx + inv[4]*dy + inv[5]) / den;
+      if(sx<0 || sy<0 || sx>=sw-1 || sy>=sh-1) continue;
+      const ix=Math.floor(sx), iy=Math.floor(sy);
+      const si=(iy*sw+ix)*4;
+      let a=(srcData[si+3]/255)*opacity;
+      // Simple feather near bounding box edges to reduce hard cut.
+      if(feather>0){
+        const edge=Math.min(X-minX,maxX-X,Y-minY,maxY-Y);
+        a*=Math.max(0,Math.min(1,edge/feather));
+      }
+      const di=(yy*w+xx)*4;
+      data[di]=srcData[si]*a + data[di]*(1-a);
+      data[di+1]=srcData[si+1]*a + data[di+1]*(1-a);
+      data[di+2]=srcData[si+2]*a + data[di+2]*(1-a);
+      data[di+3]=255;
+    }
+  }
+  ctx.putImageData(imgData,minX,minY);
+}
+function proRender(forceWarp=false){
+  const cvs = document.getElementById('pro-canvas');
+  if(!cvs) return;
+  const ctx = cvs.getContext('2d');
+  if(!proBgImg){ proRenderBase(); return; }
+  const maxW = 820, maxH = 620;
+  const r = Math.min(maxW/proBgImg.naturalWidth, maxH/proBgImg.naturalHeight, 1);
+  cvs.width=Math.round(proBgImg.naturalWidth*r); cvs.height=Math.round(proBgImg.naturalHeight*r);
+  ctx.drawImage(proBgImg,0,0,cvs.width,cvs.height);
+  if(proOverlayImg && proBgPts.length===4 && proOverlayPts.length===4){
+    const dst = proBgPts;
+    const src = proOverlayPts;
+    const op = parseInt(document.getElementById('pro-opacity')?.value || '85')/100;
+    proWarpDraw(ctx, proOverlayImg, src, dst, r, op);
+    proDrawPoints(ctx, proBgPts, r, '現場');
+    proLastRenderDataURL = cvs.toDataURL('image/png');
+    proSetStatus('已產生透視合成預覽，可下載 PNG。');
+  }else{
+    proDrawPoints(ctx, proBgPts, r, '現場');
+    proSetStatus('請先完成現場照片與模擬圖各 4 點。');
+  }
+}
+function proDownload(){
+  if(!proBgImg || !proOverlayImg || proBgPts.length!==4 || proOverlayPts.length!==4){
+    alert('請先上傳兩張圖片，並各標記 4 個點');
+    return;
+  }
+  const out=document.createElement('canvas');
+  out.width=proBgImg.naturalWidth; out.height=proBgImg.naturalHeight;
+  const ctx=out.getContext('2d');
+  ctx.drawImage(proBgImg,0,0);
+  const op=parseInt(document.getElementById('pro-opacity')?.value || '85')/100;
+  proWarpDraw(ctx, proOverlayImg, proOverlayPts, proBgPts, 1, op);
+  const a=document.createElement('a');
+  a.href=out.toDataURL('image/png');
+  a.download='望思甜點_四點透視合成_'+new Date().toISOString().slice(0,10)+'.png';
+  a.click();
+  proSetStatus(`已下載原始解析度合成圖（${out.width}×${out.height}px）。`);
 }
 
 // ===================== START =====================
