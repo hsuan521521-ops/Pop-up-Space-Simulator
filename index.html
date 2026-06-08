@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.3</title>
+<title>自製空間模擬系統 Pro v10.4</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -341,7 +341,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉；已修正貼圖面正反面。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -2527,6 +2527,11 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
     plane.rotation.y = Math.PI / 2;
   }
 
+  // 父層背板若已鏡面翻轉 scale.x = -1，子層圖片也會被肉眼看到水平翻轉。
+  // 這裡用子層 scale.x = -1 抵銷父層鏡射，只影響圖片面，不改原圖 UV。
+  const counterMirrorForParentFlip = !!(obj.item && obj.item.flipX);
+  plane.scale.x = counterMirrorForParentFlip ? -1 : 1;
+  plane.userData.counterMirrorForParentFlip = counterMirrorForParentFlip;
   obj.mesh.add(plane);
   obj.mesh.userData.forceImagePlanes[side] = plane;
 
@@ -2804,6 +2809,7 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
   scene.add(newMesh);
   obj.mesh = newMesh;
   reapplyStoredPOPImages(obj);
+  refreshForcedBackwallImageMirrorState(obj);
 }
 
 
@@ -2814,6 +2820,7 @@ function flipSelectedEscalatorBackwall(){
   selectedObj.item.flipX = !selectedObj.item.flipX;
   selectedObj.mesh.scale.x *= -1;
   selectedObj.mesh.updateMatrixWorld(true);
+  refreshForcedBackwallImageMirrorState(selectedObj);
   saveHistory();
   selectObject(selectedObj);
   updateDimensionDisplayIfNeeded();
@@ -2959,6 +2966,7 @@ function selectObject(obj){
   reapplyStoredPOPImages(obj);
   buildGizmo(obj);
   refreshAllPOPTextureOrientation(obj);
+  refreshForcedBackwallImageMirrorState(obj);
 }
 
 function deselectAll(){
@@ -4022,6 +4030,7 @@ function refreshDimensionAnnotations(){
   dimensionGroup.userData.isDimensionRoot = true;
   objects.forEach(obj=>{
     if(!obj || !obj.mesh) return;
+    refreshForcedBackwallImageMirrorState(obj);
     const ann = createObjectDimensionAnnotation(obj);
     dimensionGroup.add(ann);
   });
@@ -4057,6 +4066,22 @@ function forceUploadedTextureOriginalDirection(mesh){
   tex.needsUpdate = true;
 }
 
+
+function refreshForcedBackwallImageMirrorState(obj){
+  if(!obj || !obj.mesh || !obj.item) return;
+  const counter = !!obj.item.flipX;
+  obj.mesh.traverse(c=>{
+    if(c.isMesh && c.userData && c.userData.forceBackwallImage){
+      c.scale.x = counter ? -1 : 1;
+      c.userData.counterMirrorForParentFlip = counter;
+      if(c.material){
+        c.material.side = THREE.FrontSide;
+        c.material.needsUpdate = true;
+      }
+    }
+  });
+}
+
 function maintainUploadedPOPVisibility(){
   objects.forEach(obj=>{
     if(!obj || !obj.mesh) return;
@@ -4066,7 +4091,7 @@ function maintainUploadedPOPVisibility(){
         c.frustumCulled = false;
         c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
         if(c.material){
-          if(!c.userData.forceBackwallImage) c.material.side = THREE.DoubleSide;
+          c.material.side = THREE.DoubleSide;
           c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
           c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
           c.material.needsUpdate = true;
