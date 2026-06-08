@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v9.9</title>
+<title>自製空間模擬系統 Pro v10.0</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -1245,6 +1245,10 @@ function addPanelWithPOP(group, cfg){
   pop.userData.isPOP = true;
   pop.userData.popSide = side;
   pop.userData.panelName = name;
+  pop.userData.linkedPanel = panel;
+  panel.userData.linkedPOP = pop;
+  panel.userData.panelName = name;
+  panel.userData.popSide = side;
   pop.renderOrder = 50;
   group.add(pop);
 
@@ -2363,6 +2367,13 @@ function isBackwallObject(obj){
   return !!(obj && obj.item && obj.item.cat === 'backwall');
 }
 
+
+function worldToLocalPointForPOP(obj, x, y, z){
+  const p = new THREE.Vector3(x,y,z);
+  obj.mesh.worldToLocal(p);
+  return p;
+}
+
 function ensurePOPMeshForSide(obj, side){
   if(!obj || !obj.mesh) return null;
 
@@ -2387,12 +2398,12 @@ function ensurePOPMeshForSide(obj, side){
   if(side === 'front' || side === 'back'){
     geo = new THREE.PlaneGeometry(Math.max(size.x, 5*U), Math.max(size.y, 5*U));
     mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(center.x - obj.mesh.position.x, center.y - obj.mesh.position.y, (side === 'front' ? box.max.z : box.min.z) - obj.mesh.position.z + (side === 'front' ? eps : -eps));
+    mesh.position.copy(worldToLocalPointForPOP(obj, center.x, center.y, (side === 'front' ? box.max.z + eps : box.min.z - eps)));
     mesh.rotation.y = side === 'front' ? 0 : Math.PI;
   }else{
     geo = new THREE.PlaneGeometry(Math.max(size.z, 5*U), Math.max(size.y, 5*U));
     mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set((side === 'right' ? box.max.x : box.min.x) - obj.mesh.position.x + (side === 'right' ? eps : -eps), center.y - obj.mesh.position.y, center.z - obj.mesh.position.z);
+    mesh.position.copy(worldToLocalPointForPOP(obj, (side === 'right' ? box.max.x + eps : box.min.x - eps), center.y, center.z));
     mesh.rotation.y = side === 'right' ? -Math.PI/2 : Math.PI/2;
   }
 
@@ -2452,6 +2463,9 @@ function applyPOPToSide(input, side){
         popMesh.material = makePersistentPOPMaterial(tex);
         popMesh.material.needsUpdate = true;
         lockPOPImageVisible(popMesh);
+        applyTextureToBackwallBody(selectedObj, side, tex);
+        selectedObj.item.popImages = selectedObj.item.popImages || {};
+        selectedObj.item.popImages[side] = canvas.toDataURL('image/png');
         popMesh.userData.hasPOP = true;
         const lbl = document.getElementById('pop-label-' + side);
         if(lbl){ lbl.style.borderColor='var(--green,#7eb87a)'; lbl.style.color='var(--green,#7eb87a)'; lbl.childNodes[0].textContent='✓ 已上傳'; }
@@ -2616,6 +2630,7 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
   scene.remove(obj.mesh);
   scene.add(newMesh);
   obj.mesh = newMesh;
+  reapplyStoredPOPImages(obj);
 }
 
 
@@ -2678,6 +2693,46 @@ function ctxSwapEscalatorBackwall(){
 
 
 // ===================== POP PANEL VISIBILITY =====================
+
+function reapplyStoredPOPImages(obj){
+  if(!obj || !obj.item || !obj.item.popImages) return;
+  Object.entries(obj.item.popImages).forEach(([side, dataUrl])=>{
+    if(!dataUrl) return;
+    const img = new Image();
+    img.onload = ()=>{
+      const cvs = document.createElement('canvas');
+      const maxTex = 2048;
+      const scale = Math.min(1, maxTex / Math.max(img.naturalWidth, img.naturalHeight));
+      cvs.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      cvs.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      cvs.getContext('2d').drawImage(img, 0, 0, cvs.width, cvs.height);
+
+      const tex = new THREE.CanvasTexture(cvs);
+      tex.encoding = THREE.sRGBEncoding;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.repeat.set(1,1);
+      tex.offset.set(0,0);
+      tex.rotation = 0;
+      tex.needsUpdate = true;
+
+      const pop = ensurePOPMeshForSide(obj, side);
+      if(pop){
+        if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(pop.geometry);
+        pop.material = makePersistentPOPMaterial(tex);
+        pop.userData.hasPOP = true;
+        lockPOPImageVisible(pop);
+      }
+      applyTextureToBackwallBody(obj, side, tex);
+    };
+    img.src = dataUrl;
+  });
+}
+
+
 function selectObject(obj){
   deselectAll();
   selectedObj = obj;
@@ -2725,6 +2780,7 @@ function selectObject(obj){
     });
   }
   updateSceneList();
+  reapplyStoredPOPImages(obj);
   buildGizmo(obj);
   refreshAllPOPTextureOrientation(obj);
 }
