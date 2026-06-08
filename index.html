@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.1</title>
+<title>自製空間模擬系統 Pro v10.2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -2318,15 +2318,19 @@ function findPOPMesh(group){
 }
 
 function findPOPMeshBySide(group, side){
-  const directKey = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
-  if(root && root.userData && root.userData[directKey]) return root.userData[directKey];
+  if(!group) return null;
+  const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
 
-  // Tables store refs directly on userData
-  const direct = group.userData['pop' + side.charAt(0).toUpperCase() + side.slice(1)];
-  if(direct) return direct;
-  // Fridge: first POP mesh (front only)
+  if(group.userData && group.userData[key]) return group.userData[key];
+
   let found = null;
-  group.traverse(c => { if(c.userData && c.userData.isPOP && c.userData.popSide === side) found = c; });
+  group.traverse(c => {
+    if(found) return;
+    if(c.userData && c.userData.isPOP && c.userData.popSide === side) found = c;
+  });
+
+  // 冰箱/舊物件可能只有 popMesh，front 時使用它
+  if(!found && side === 'front' && group.userData && group.userData.popMesh) found = group.userData.popMesh;
   return found;
 }
 
@@ -2425,57 +2429,224 @@ function showBackwallUploadError(message){
   alert(message || '背板圖片上傳失敗，請先選取背板後再上傳。');
 }
 
+
+function cloneTextureSafe(tex){
+  const t = tex.clone();
+  t.image = tex.image;
+  t.needsUpdate = true;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.repeat.set(1, 1);
+  t.offset.set(0, 0);
+  t.rotation = 0;
+  if(t.center) t.center.set(0, 0);
+  return t;
+}
+
+function makeAlwaysVisibleImageMaterial(tex){
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(1, 1);
+  tex.offset.set(0, 0);
+  tex.rotation = 0;
+  if(tex.center) tex.center.set(0, 0);
+  tex.needsUpdate = true;
+
+  return new THREE.MeshBasicMaterial({
+    map: tex,
+    side: THREE.DoubleSide,
+    transparent: false,
+    opacity: 1,
+    depthTest: false,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -20,
+    polygonOffsetUnits: -20
+  });
+}
+
+function getEscalatorPanelSize(obj, side){
+  const item = obj?.item || {};
+  const centerW = (item.centerW || item.w || 176) * U;
+  const sideW = (item.sideW || item.d || 199) * U;
+  const h = (item.h || 223) * U;
+  return {
+    w: (side === 'left' || side === 'right') ? sideW : centerW,
+    h
+  };
+}
+
+function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
+  // 手扶梯背板最終保底方案：
+  // 不依賴原始不規則板材 UV，也不依賴 raycast 點到哪一片。
+  // 直接在背板表面前方新增一片滿版圖片面。
+  if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
+  if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
+
+  obj.mesh.userData.forceImagePlanes = obj.mesh.userData.forceImagePlanes || {};
+
+  // 移除同面舊圖
+  const old = obj.mesh.userData.forceImagePlanes[side];
+  if(old && old.parent){
+    old.parent.remove(old);
+    old.geometry && old.geometry.dispose && old.geometry.dispose();
+    old.material && old.material.dispose && old.material.dispose();
+  }
+
+  const item = obj.item;
+  const centerW = (item.centerW || item.w || 176) * U;
+  const sideW = (item.sideW || item.d || 199) * U;
+  const H = (item.h || 223) * U;
+  const eps = 6 * U;
+
+  const size = getEscalatorPanelSize(obj, side);
+  const geo = new THREE.PlaneGeometry(size.w, size.h);
+  const mat = makeAlwaysVisibleImageMaterial(cloneTextureSafe(tex));
+  const plane = new THREE.Mesh(geo, mat);
+
+  plane.userData.isPOP = true;
+  plane.userData.hasPOP = true;
+  plane.userData.popSide = side;
+  plane.userData.forceBackwallImage = true;
+  plane.userData.lockVisible = true;
+  plane.renderOrder = 100000;
+  plane.frustumCulled = false;
+  plane.visible = true;
+
+  if(side === 'front'){
+    plane.position.set(0, H/2, eps);
+    plane.rotation.y = 0;
+  }else if(side === 'back'){
+    plane.position.set(0, H/2, -eps);
+    plane.rotation.y = Math.PI;
+  }else if(side === 'left'){
+    plane.position.set(-centerW/2 - eps, H/2, -sideW/2);
+    plane.rotation.y = Math.PI / 2;
+  }else if(side === 'right'){
+    plane.position.set(centerW/2 + eps, H/2, -sideW/2);
+    plane.rotation.y = -Math.PI / 2;
+  }
+
+  obj.mesh.add(plane);
+  obj.mesh.userData.forceImagePlanes[side] = plane;
+
+  const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
+  obj.mesh.userData[key] = plane;
+  if(side === 'front') obj.mesh.userData.popMesh = plane;
+
+  return plane;
+}
+
+function applyTextureToBackwallBody(obj, side, tex){
+  // 保留一層真實材質貼圖，但最終顯示以 forceCreateEscalatorBackwallImagePlane 為主。
+  if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return;
+
+  const panelNames = {
+    front: '中央主背板',
+    left: '左折板',
+    right: '右折板',
+    back: '背面中央'
+  };
+  const targetName = panelNames[side];
+
+  obj.mesh.traverse(c=>{
+    if(!c.isMesh || c.userData?.isPOP || c.userData?.forceBackwallImage) return;
+    if(c.userData && (c.userData.panelName === targetName || c.userData.popSide === side)){
+      if(c.geometry && typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(c.geometry);
+      c.material = makeAlwaysVisibleImageMaterial(cloneTextureSafe(tex));
+      c.visible = true;
+      c.frustumCulled = false;
+      c.renderOrder = 99999;
+    }
+  });
+}
+
+
 function applyPOPToSide(input, side){
-  if(!selectedObj || !input || !input.files || !input.files[0]){ showBackwallUploadError('請先選取要上傳圖片的背板或物件。'); return; }
-  if(!selectedObj || !input.files[0]) return;
+  if(!selectedObj){
+    alert('請先選取要上傳圖片的背板或物件。');
+    return;
+  }
+  if(!input || !input.files || !input.files[0]) return;
+
+  const file = input.files[0];
+  if(!file.type.startsWith('image/')){
+    alert('請選擇圖片檔案。');
+    input.value = '';
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
-      // 保留原始解析度
       const canvas = document.createElement('canvas');
       const maxTex = 2048;
-      let tw = img.naturalWidth;
-      let th = img.naturalHeight;
-      const ratio = Math.min(1, maxTex / Math.max(tw, th));
-      tw = Math.max(1, Math.round(tw * ratio));
-      th = Math.max(1, Math.round(th * ratio));
+      const ratio = Math.min(1, maxTex / Math.max(img.naturalWidth, img.naturalHeight));
+      const tw = Math.max(1, Math.round(img.naturalWidth * ratio));
+      const th = Math.max(1, Math.round(img.naturalHeight * ratio));
       canvas.width = tw;
       canvas.height = th;
       canvas.getContext('2d').drawImage(img, 0, 0, tw, th);
+
       const tex = new THREE.CanvasTexture(canvas);
-      // 最高畫質設定
-      tex.encoding    = THREE.sRGBEncoding;
-      tex.anisotropy  = renderer.capabilities.getMaxAnisotropy();
-      tex.minFilter   = THREE.LinearFilter;
-      tex.magFilter   = THREE.LinearFilter;
+      tex.encoding = THREE.sRGBEncoding;
+      tex.anisotropy = renderer?.capabilities?.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
       tex.generateMipmaps = false;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.repeat.set(1,1);
+      tex.offset.set(0,0);
+      tex.rotation = 0;
+      if(tex.center) tex.center.set(0,0);
       tex.needsUpdate = true;
-      const popMesh = ensurePOPMeshForSide(selectedObj, side);
-      if(!popMesh){ showBackwallUploadError('找不到可貼圖面，已嘗試自動建立但失敗。'); return; }
-      if(popMesh){
-        compensatePOPTextureForObjectMirror(tex, selectedObj, popMesh, side);
-        const forcedBackwallPlane = forceCreateEscalatorBackwallImagePlane(selectedObj, side, tex);
-        if(popMesh.geometry) normalizeGeometryUVToFullBleed(popMesh.geometry);
-        tex.wrapS = THREE.ClampToEdgeWrapping;
-        tex.wrapT = THREE.ClampToEdgeWrapping;
-        tex.offset.set(0, 0);
-        tex.repeat.set(1, 1);
-        popMesh.material = makePersistentPOPMaterial(tex);
-        popMesh.material.needsUpdate = true;
-        lockPOPImageVisible(popMesh);
-        if(forcedBackwallPlane) lockPOPImageVisible(forcedBackwallPlane);
-        applyTextureToBackwallBody(selectedObj, side, tex);
-        selectedObj.item.popImages = selectedObj.item.popImages || {};
-        selectedObj.item.popImages[side] = canvas.toDataURL('image/png');
-        popMesh.userData.hasPOP = true;
-        const lbl = document.getElementById('pop-label-' + side);
-        if(lbl){ lbl.style.borderColor='var(--green,#7eb87a)'; lbl.style.color='var(--green,#7eb87a)'; lbl.childNodes[0].textContent='✓ 已上傳'; }
+
+      // 一般物件：先找/建立 POP 面
+      let popMesh = ensurePOPMeshForSide(selectedObj, side);
+
+      // 手扶梯背板：強制新增獨立顯示面，這才是主要顯示來源
+      const forcedPlane = forceCreateEscalatorBackwallImagePlane(selectedObj, side, tex);
+      if(forcedPlane) popMesh = forcedPlane;
+
+      if(!popMesh){
+        alert('找不到可貼圖面，請重新選取物件後再試。');
+        input.value = '';
+        return;
       }
+
+      if(popMesh.geometry && typeof normalizeGeometryUVToFullBleed === 'function'){
+        normalizeGeometryUVToFullBleed(popMesh.geometry);
+      }
+
+      popMesh.material = makeAlwaysVisibleImageMaterial(tex);
+      popMesh.userData.hasPOP = true;
+      popMesh.userData.isPOP = true;
+      popMesh.userData.popSide = side;
+      popMesh.visible = true;
+      popMesh.frustumCulled = false;
+      popMesh.renderOrder = 100000;
+      lockPOPImageVisible(popMesh);
+
+      applyTextureToBackwallBody(selectedObj, side, tex);
+
+      selectedObj.item.popImages = selectedObj.item.popImages || {};
+      selectedObj.item.popImages[side] = canvas.toDataURL('image/png');
+
+      const lbl = document.getElementById('pop-label-' + side);
+      if(lbl){
+        lbl.style.borderColor = 'var(--green,#7eb87a)';
+        lbl.style.color = 'var(--green,#7eb87a)';
+        if(lbl.childNodes && lbl.childNodes[0]) lbl.childNodes[0].textContent = '✓ 已上傳';
+      }
+
+      if(renderer && scene && camera) renderer.render(scene, camera);
     };
+    img.onerror = () => alert('圖片讀取失敗，請換一張圖片再試。');
     img.src = e.target.result;
   };
-  reader.readAsDataURL(input.files[0]);
+  reader.readAsDataURL(file);
   input.value = '';
 }
 
@@ -2721,7 +2892,9 @@ function reapplyStoredPOPImages(obj){
       tex.rotation = 0;
       tex.needsUpdate = true;
 
-      const pop = ensurePOPMeshForSide(obj, side);
+      let pop = ensurePOPMeshForSide(obj, side);
+      const forcedPlane = forceCreateEscalatorBackwallImagePlane(obj, side, tex);
+      if(forcedPlane) pop = forcedPlane;
       if(pop){
         if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(pop.geometry);
         pop.material = makePersistentPOPMaterial(tex);
@@ -3889,8 +4062,15 @@ function maintainUploadedPOPVisibility(){
     if(!obj || !obj.mesh) return;
     obj.mesh.traverse(c=>{
       if(c.isMesh && c.userData && (c.userData.forceBackwallImage || (c.userData.isPOP && c.userData.hasPOP))){
-        forceUploadedTextureOriginalDirection(c);
-        lockPOPImageVisible(c);
+        c.visible = true;
+        c.frustumCulled = false;
+        c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
+        if(c.material){
+          c.material.side = THREE.DoubleSide;
+          c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
+          c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
+          c.material.needsUpdate = true;
+        }
       }
     });
   });
