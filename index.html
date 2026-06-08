@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.2</title>
+<title>自製空間模擬系統 Pro v10.8</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -292,7 +292,7 @@
           </div>
           <div id="escalator-transform-props" style="display:none;border-top:1px solid var(--border);padding-top:8px;margin:8px 0;">
             <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">手扶梯背板方向</div>
-            <button class="action-btn" onclick="flipSelectedEscalatorBackwall()">⇄ 鏡面翻轉</button>
+            <button class="action-btn" onclick="flipSelectedEscalatorBackwall()">⇄ 切換左右模板</button>
             <button class="action-btn" onclick="swapSelectedEscalatorBackwallSide()">↔ 左右對調折板</button>
             <button class="action-btn" onclick="resetSelectedEscalatorBackwallTransform()">⟲ 還原方向</button>
             <div style="font-size:10px;color:var(--text3);line-height:1.5;margin-top:4px;">現場規格不合時，可直接翻轉或對調，不需要重選模板。</div>
@@ -341,7 +341,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片會直接嵌入手扶梯背板本體，不會浮在外面。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可左右切換背板模板；上傳圖片會嵌入背板本體，永遠不鏡像、不反字。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -449,7 +449,7 @@
 <div id="ctx-menu">
   <div class="ctx-item" id="ctx-name" style="color:var(--text2);font-size:11px;cursor:default;padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:2px;"></div>
   <div class="ctx-item" id="ctx-resize" onclick="ctxResize()" style="display:none;">📐 更改尺寸</div>
-  <div class="ctx-item" id="ctx-flip-escalator" onclick="ctxFlipEscalatorBackwall()" style="display:none;">⇄ 鏡面翻轉背板</div>
+  <div class="ctx-item" id="ctx-flip-escalator" onclick="ctxFlipEscalatorBackwall()" style="display:none;">⇄ 切換左右模板背板</div>
   <div class="ctx-item" id="ctx-swap-escalator" onclick="ctxSwapEscalatorBackwall()" style="display:none;">↔ 左右對調折板</div>
   <div class="ctx-item" id="ctx-replace-custom-image" onclick="ctxReplaceCustomImage()" style="display:none;">🖼 重新上傳圖片物件</div>
   <div id="ctx-upload-section" style="display:none;">
@@ -813,6 +813,22 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
+/*
+核心規則：
+使用者上傳的圖片永遠保持原始方向。
+
+禁止：
+- 水平翻轉
+- 垂直翻轉
+- 鏡像
+- 負 UV
+- 負 scale 作用於背板或圖片
+- texture.repeat.x = -1
+- texture.repeat.y = -1
+- texture.offset 補償翻轉
+
+任何新功能不得破壞此規則。
+*/
 // ===================== DATA =====================
 const CATEGORIES = [
   {id:'cake_fridge',  name:'蛋糕展示冰箱'},
@@ -2478,13 +2494,14 @@ function getEscalatorPanelSize(obj, side){
 
 
 function makeEmbeddedBackwallMaterial(tex){
-  // v10.7 手扶梯背板專用：直接貼到板材本體，不再浮在外面。
+  // v10.8 手扶梯背板專用：直接貼到板材本體，圖片永遠維持原始方向。
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.repeat.set(1, 1);
   tex.offset.set(0, 0);
   tex.rotation = 0;
   if(tex.center) tex.center.set(0, 0);
+  tex.flipY = true;
   tex.needsUpdate = true;
 
   return new THREE.MeshBasicMaterial({
@@ -2547,8 +2564,8 @@ function getOriginalBackwallPopAndPanel(obj, side){
 
 
 function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
-  // v10.7：手扶梯背板圖片改成嵌入板材本體。
-  // 不再顯示外掛圖片板，所以不會凸出在模型外面。
+  // v10.8：保留函式名稱作為舊呼叫相容，但實際不再建立任何外掛圖片 Plane。
+  // 圖片只會嵌入手扶梯背板本體 Mesh，並且永遠不做鏡像 / 翻轉 / 負 scale。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
   if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
 
@@ -2561,6 +2578,9 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
     normalizeGeometryUVToFullBleed(panel.geometry);
   }
 
+  panel.scale.x = 1;
+  panel.scale.y = 1;
+  panel.scale.z = 1;
   panel.material = makeEmbeddedBackwallMaterial(cloneTextureSafe(tex));
   panel.visible = true;
   panel.frustumCulled = false;
@@ -2574,13 +2594,16 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
   panel.userData.shapeMaskedBackwallImage = true;
   panel.userData.isPOP = true;
   panel.userData.lockVisible = true;
+  panel.userData.counterMirrorForParentFlip = false;
 
-  // 原本透明 POP 面只當狀態代理，不再顯示，避免圖片浮在外面。
+  // 原透明 POP 面只當狀態代理，不顯示，避免任何圖片浮在外面。
   if(pop && pop !== panel){
     pop.visible = false;
+    pop.scale.x = 1;
     pop.userData.hasPOP = true;
     pop.userData.proxyEmbeddedPanel = panel;
     pop.userData.shapeMaskedBackwallImage = true;
+    pop.userData.counterMirrorForParentFlip = false;
     pop.material = makeBlankPOPMaterial();
   }
 
@@ -2592,9 +2615,8 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
 }
 
 function applyTextureToBackwallBody(obj, side, tex){
-  // 保留一層真實材質貼圖，但最終顯示以 forceCreateEscalatorBackwallImagePlane 為主。
+  // 一般背板使用本體材質貼圖；手扶梯背板由 forceCreateEscalatorBackwallImagePlane 直接嵌入本體。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return;
-  if(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0) return;
   if(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0) return;
 
   const panelNames = {
@@ -2659,11 +2681,11 @@ function applyPOPToSide(input, side){
       if(tex.center) tex.center.set(0,0);
       tex.needsUpdate = true;
 
-      // 一般物件：先找/建立 POP 面
-      let popMesh = ensurePOPMeshForSide(selectedObj, side);
+      // v10.8：手扶梯背板直接嵌入本體 Mesh；一般物件才使用 POP 面。
+      const isEscBackwall = selectedObj.item && selectedObj.item.shape && selectedObj.item.shape.indexOf('escalator_') === 0;
+      let popMesh = isEscBackwall ? null : ensurePOPMeshForSide(selectedObj, side);
 
-      // 手扶梯背板：強制新增獨立顯示面，這才是主要顯示來源
-      const forcedPlane = forceCreateEscalatorBackwallImagePlane(selectedObj, side, tex);
+      const forcedPlane = isEscBackwall ? forceCreateEscalatorBackwallImagePlane(selectedObj, side, tex) : null;
       if(forcedPlane) popMesh = forcedPlane;
 
       if(!popMesh){
@@ -2847,11 +2869,11 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
   if(!obj) return;
   const oldPos = obj.mesh.position.clone();
   const oldRot = obj.mesh.rotation.clone();
-  const oldScale = obj.mesh.scale.clone();
   const newMesh = buildMesh(obj.item, obj.color);
   newMesh.position.copy(oldPos);
   newMesh.rotation.copy(oldRot);
-  if(obj.item && obj.item.flipX) newMesh.scale.x *= -1;
+  // v10.8：禁止用 scale.x = -1 產生鏡像，避免圖片反字。
+  newMesh.scale.set(1, 1, 1);
   newMesh.userData = {
     objId: obj.id,
     popFront: newMesh.userData.popFront,
@@ -2871,11 +2893,26 @@ function refreshSelectedPOPTextureOrientation(){ refreshAllPOPTextureOrientation
 
 function flipSelectedEscalatorBackwall(){
   if(!selectedObj || !isEscalatorBackwallItem(selectedObj.item)) return;
-  selectedObj.item.flipX = !selectedObj.item.flipX;
-  selectedObj.mesh.scale.x *= -1;
+
+  const shape = selectedObj.item.shape || '';
+
+  // v10.8：鏡面翻轉不再使用 scale.x = -1。
+  // L 型直接切換左右模板並重建模型；ㄣ型三面本身對稱，只重建並保留圖片正向。
+  if(shape.includes('_left')){
+    selectedObj.item.shape = shape.replace('_left', '_right');
+    selectedObj.item.name = selectedObj.item.name.replace(' 左', ' 右').replace('（左）','（右）');
+  }else if(shape.includes('_right')){
+    selectedObj.item.shape = shape.replace('_right', '_left');
+    selectedObj.item.name = selectedObj.item.name.replace(' 右', ' 左').replace('（右）','（左）');
+  }
+
+  selectedObj.item.flipX = false;
+  rebuildSelectedObjectMeshKeepTransform(selectedObj);
+  selectedObj.mesh.scale.set(1,1,1);
   selectedObj.mesh.updateMatrixWorld(true);
   saveHistory();
   selectObject(selectedObj);
+  updateSceneList();
   updateDimensionDisplayIfNeeded();
 }
 
@@ -2883,17 +2920,18 @@ function swapSelectedEscalatorBackwallSide(){
   if(!selectedObj || !isEscalatorBackwallItem(selectedObj.item)) return;
   const shape = selectedObj.item.shape || '';
 
+  // v10.8：左右對調改成重建獨立模板，不使用負 scale。
   if(shape.includes('_left')){
     selectedObj.item.shape = shape.replace('_left', '_right');
     selectedObj.item.name = selectedObj.item.name.replace(' 左', ' 右').replace('（左）','（右）');
   }else if(shape.includes('_right')){
     selectedObj.item.shape = shape.replace('_right', '_left');
     selectedObj.item.name = selectedObj.item.name.replace(' 右', ' 左').replace('（右）','（左）');
-  }else{
-    selectedObj.item.flipX = !selectedObj.item.flipX;
   }
 
+  selectedObj.item.flipX = false;
   rebuildSelectedObjectMeshKeepTransform(selectedObj);
+  selectedObj.mesh.scale.set(1,1,1);
   saveHistory();
   selectObject(selectedObj);
   updateSceneList();
@@ -2952,8 +2990,9 @@ function reapplyStoredPOPImages(obj){
       tex.rotation = 0;
       tex.needsUpdate = true;
 
-      let pop = ensurePOPMeshForSide(obj, side);
-      const forcedPlane = forceCreateEscalatorBackwallImagePlane(obj, side, tex);
+      const isEscBackwall = obj.item && obj.item.shape && obj.item.shape.indexOf('escalator_') === 0;
+      let pop = isEscBackwall ? null : ensurePOPMeshForSide(obj, side);
+      const forcedPlane = isEscBackwall ? forceCreateEscalatorBackwallImagePlane(obj, side, tex) : null;
       if(forcedPlane) pop = forcedPlane;
       if(pop){
         if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(pop.geometry);
@@ -3088,7 +3127,7 @@ function duplicateSelected(){
   const nx = src.x + 10*U, nz = src.z + 10*U;
   newMesh.position.set(nx, 0, nz);
   newMesh.rotation.y = src.rot;
-  if(src.item && src.item.flipX) newMesh.scale.x *= -1;
+  if(src.item && src.item.flipX) newMesh.scale.x = 1;
   const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot };
   newMesh.userData = {objId: obj.id};
   scene.add(newMesh);
@@ -4122,25 +4161,15 @@ function forceUploadedTextureOriginalDirection(mesh){
 
 function refreshForcedBackwallImageMirrorState(obj){
   if(!obj || !obj.mesh || !obj.item) return;
-  const counter = !!obj.item.flipX;
+  obj.item.flipX = false;
+  obj.mesh.scale.x = 1;
+
   obj.mesh.traverse(c=>{
     if(!c.isMesh || !c.userData) return;
 
-    // 已嵌入板材本體的圖片不能再 scale.x 抵銷，否則會脫離背板。
-    if(c.userData.embeddedBackwallTexture){
+    if(c.userData.embeddedBackwallTexture || c.userData.forceBackwallImage || c.userData.shapeMaskedBackwallImage){
       c.scale.x = 1;
-      if(c.material){
-        c.material.side = THREE.DoubleSide;
-        c.material.depthTest = true;
-        c.material.depthWrite = true;
-        c.material.needsUpdate = true;
-      }
-      return;
-    }
-
-    if(c.userData.forceBackwallImage || c.userData.shapeMaskedBackwallImage){
-      c.scale.x = counter ? -1 : 1;
-      c.userData.counterMirrorForParentFlip = counter;
+      c.userData.counterMirrorForParentFlip = false;
       if(c.material){
         c.material.side = THREE.DoubleSide;
         c.material.needsUpdate = true;
@@ -4155,11 +4184,13 @@ function maintainUploadedPOPVisibility(){
       if(c.isMesh && c.userData && (c.userData.embeddedBackwallTexture || c.userData.forceBackwallImage || (c.userData.isPOP && c.userData.hasPOP))){
         if(c.userData.proxyEmbeddedPanel){
           c.visible = false;
+          c.scale.x = 1;
           return;
         }
 
         c.visible = true;
         c.frustumCulled = false;
+        c.scale.x = 1;
 
         if(c.userData.embeddedBackwallTexture){
           c.renderOrder = 80;
