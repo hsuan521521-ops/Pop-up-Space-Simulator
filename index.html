@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.0</title>
+<title>自製空間模擬系統 Pro v10.1</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -326,7 +326,7 @@
           <div id="pop-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
             <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">輸出物圖片</div>
             <div id="backwall-direct-upload-panel" style="display:none;background:rgba(122,90,34,.12);border:1px solid rgba(122,90,34,.35);border-radius:7px;padding:8px;margin-bottom:8px;">
-              <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px;">背板圖片直接上傳</div>
+              <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px;">背板圖片直接上傳（強制顯示版）</div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
                 <button class="action-btn" onclick="quickUploadPOP('front')" style="margin:0;text-align:center;">正面 / 主面</button>
                 <button class="action-btn" onclick="quickUploadPOP('back')" style="margin:0;text-align:center;">背面</button>
@@ -2455,6 +2455,7 @@ function applyPOPToSide(input, side){
       if(!popMesh){ showBackwallUploadError('找不到可貼圖面，已嘗試自動建立但失敗。'); return; }
       if(popMesh){
         compensatePOPTextureForObjectMirror(tex, selectedObj, popMesh, side);
+        const forcedBackwallPlane = forceCreateEscalatorBackwallImagePlane(selectedObj, side, tex);
         if(popMesh.geometry) normalizeGeometryUVToFullBleed(popMesh.geometry);
         tex.wrapS = THREE.ClampToEdgeWrapping;
         tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -2463,6 +2464,7 @@ function applyPOPToSide(input, side){
         popMesh.material = makePersistentPOPMaterial(tex);
         popMesh.material.needsUpdate = true;
         lockPOPImageVisible(popMesh);
+        if(forcedBackwallPlane) lockPOPImageVisible(forcedBackwallPlane);
         applyTextureToBackwallBody(selectedObj, side, tex);
         selectedObj.item.popImages = selectedObj.item.popImages || {};
         selectedObj.item.popImages[side] = canvas.toDataURL('image/png');
@@ -2727,6 +2729,7 @@ function reapplyStoredPOPImages(obj){
         lockPOPImageVisible(pop);
       }
       applyTextureToBackwallBody(obj, side, tex);
+      forceCreateEscalatorBackwallImagePlane(obj, side, tex);
     };
     img.src = dataUrl;
   });
@@ -3885,7 +3888,7 @@ function maintainUploadedPOPVisibility(){
   objects.forEach(obj=>{
     if(!obj || !obj.mesh) return;
     obj.mesh.traverse(c=>{
-      if(c.isMesh && c.userData && c.userData.isPOP && c.userData.hasPOP){
+      if(c.isMesh && c.userData && (c.userData.forceBackwallImage || (c.userData.isPOP && c.userData.hasPOP))){
         forceUploadedTextureOriginalDirection(c);
         lockPOPImageVisible(c);
       }
