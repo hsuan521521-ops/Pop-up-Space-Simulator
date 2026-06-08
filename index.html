@@ -341,7 +341,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片會直接嵌入手扶梯背板本體，不會浮在外面。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -2476,79 +2476,125 @@ function getEscalatorPanelSize(obj, side){
   };
 }
 
-function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
-  // v10.6 重要修正：
-  // 不再另外建立一片新的圖片面，因為新面的位置/旋轉可能和原本 3D 折板不同步。
-  // 改用 buildReal3DEscalatorUnderBackwall() 內 addPanelWithPOP() 建好的原始 POP mesh。
-  // 原始 POP mesh 已經和中央板、左折板、右折板共用正確 ShapeGeometry、位置與角度。
-  if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
-  if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
 
-  obj.mesh.userData.forceImagePlanes = obj.mesh.userData.forceImagePlanes || {};
+function makeEmbeddedBackwallMaterial(tex){
+  // v10.7 手扶梯背板專用：直接貼到板材本體，不再浮在外面。
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(1, 1);
+  tex.offset.set(0, 0);
+  tex.rotation = 0;
+  if(tex.center) tex.center.set(0, 0);
+  tex.needsUpdate = true;
 
-  // 清掉舊版 v10.4/v10.5 生成的 forceBackwallImage 額外面，避免它蓋在錯誤位置。
-  const old = obj.mesh.userData.forceImagePlanes[side];
-  if(old && old.parent){
-    old.parent.remove(old);
-    old.geometry && old.geometry.dispose && old.geometry.dispose();
-    old.material && old.material.dispose && old.material.dispose();
-  }
-  obj.mesh.userData.forceImagePlanes[side] = null;
+  return new THREE.MeshBasicMaterial({
+    map: tex,
+    side: THREE.DoubleSide,
+    transparent: false,
+    opacity: 1,
+    depthTest: true,
+    depthWrite: true,
+    polygonOffset: false
+  });
+}
 
-  // 找原始 POP 面：這個才是正確折板位置與斜切形狀。
-  let pop = null;
+function removeFloatingBackwallImagePlanes(obj, side){
+  if(!obj || !obj.mesh) return;
+  const kill = [];
   obj.mesh.traverse(c=>{
-    if(pop) return;
-    if(c.isMesh && c.userData && c.userData.isPOP && c.userData.popSide === side && !c.userData.forceBackwallImage){
-      pop = c;
+    if(c && c.userData && c.userData.forceBackwallImage && (!side || c.userData.popSide === side)){
+      kill.push(c);
+    }
+  });
+  kill.forEach(c=>{
+    if(c.parent) c.parent.remove(c);
+    c.geometry && c.geometry.dispose && c.geometry.dispose();
+    c.material && c.material.dispose && c.material.dispose();
+  });
+  if(obj.mesh.userData && obj.mesh.userData.forceImagePlanes){
+    if(side) obj.mesh.userData.forceImagePlanes[side] = null;
+    else obj.mesh.userData.forceImagePlanes = {};
+  }
+}
+
+function getOriginalBackwallPopAndPanel(obj, side){
+  let pop = null;
+  let panel = null;
+  if(!obj || !obj.mesh) return {pop:null, panel:null};
+
+  obj.mesh.traverse(c=>{
+    if(c.isMesh && c.userData){
+      if(!pop && c.userData.isPOP && c.userData.popSide === side && !c.userData.forceBackwallImage){
+        pop = c;
+        if(c.userData.linkedPanel) panel = c.userData.linkedPanel;
+      }
     }
   });
 
-  if(!pop){
-    // 保底：使用 userData 直接掛載的面。
-    const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
-    pop = obj.mesh.userData[key] || null;
+  if(!panel && pop && pop.userData && pop.userData.linkedPanel) panel = pop.userData.linkedPanel;
+
+  if(!panel){
+    const panelNames = {front:'中央主背板', left:'左折板', right:'右折板', back:'背面中央'};
+    const targetName = panelNames[side];
+    obj.mesh.traverse(c=>{
+      if(!panel && c.isMesh && c.userData && !c.userData.isPOP && c.userData.panelName === targetName){
+        panel = c;
+      }
+    });
+  }
+  return {pop, panel};
+}
+
+
+function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
+  // v10.7：手扶梯背板圖片改成嵌入板材本體。
+  // 不再顯示外掛圖片板，所以不會凸出在模型外面。
+  if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
+  if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
+
+  removeFloatingBackwallImagePlanes(obj, side);
+
+  const {pop, panel} = getOriginalBackwallPopAndPanel(obj, side);
+  if(!panel) return pop || null;
+
+  if(panel.geometry && typeof normalizeGeometryUVToFullBleed === 'function'){
+    normalizeGeometryUVToFullBleed(panel.geometry);
   }
 
-  if(!pop) return null;
+  panel.material = makeEmbeddedBackwallMaterial(cloneTextureSafe(tex));
+  panel.visible = true;
+  panel.frustumCulled = false;
+  panel.renderOrder = 80;
+  panel.castShadow = true;
+  panel.receiveShadow = true;
 
-  if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function'){
-    normalizeGeometryUVToFullBleed(pop.geometry);
+  panel.userData.hasPOP = true;
+  panel.userData.popSide = side;
+  panel.userData.embeddedBackwallTexture = true;
+  panel.userData.shapeMaskedBackwallImage = true;
+  panel.userData.isPOP = true;
+  panel.userData.lockVisible = true;
+
+  // 原本透明 POP 面只當狀態代理，不再顯示，避免圖片浮在外面。
+  if(pop && pop !== panel){
+    pop.visible = false;
+    pop.userData.hasPOP = true;
+    pop.userData.proxyEmbeddedPanel = panel;
+    pop.userData.shapeMaskedBackwallImage = true;
+    pop.material = makeBlankPOPMaterial();
   }
-
-  pop.material = makeAlwaysVisibleImageMaterial(cloneTextureSafe(tex));
-  pop.material.side = THREE.DoubleSide; // 使用原始 POP 面，允許兩側可見，但不改 UV，不翻轉圖片。
-  pop.material.depthTest = false;
-  pop.material.depthWrite = false;
-  pop.material.transparent = false;
-  pop.material.needsUpdate = true;
-
-  pop.visible = true;
-  pop.frustumCulled = false;
-  pop.renderOrder = 100000;
-  pop.userData.hasPOP = true;
-  pop.userData.isPOP = true;
-  pop.userData.popSide = side;
-  pop.userData.lockVisible = true;
-  pop.userData.shapeMaskedBackwallImage = true;
-  pop.userData.forceBackwallImage = false;
-
-  // 父層若鏡面翻轉，原始 POP 面會一起被翻。
-  // 這裡只對貼圖面做反向抵銷，避免肉眼看到水平鏡射。
-  const counterMirrorForParentFlip = !!(obj.item && obj.item.flipX);
-  pop.scale.x = counterMirrorForParentFlip ? -1 : 1;
-  pop.userData.counterMirrorForParentFlip = counterMirrorForParentFlip;
 
   const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
-  obj.mesh.userData[key] = pop;
-  if(side === 'front') obj.mesh.userData.popMesh = pop;
+  obj.mesh.userData[key] = panel;
+  if(side === 'front') obj.mesh.userData.popMesh = panel;
 
-  return pop;
+  return panel;
 }
 
 function applyTextureToBackwallBody(obj, side, tex){
   // 保留一層真實材質貼圖，但最終顯示以 forceCreateEscalatorBackwallImagePlane 為主。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return;
+  if(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0) return;
   if(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0) return;
 
   const panelNames = {
@@ -2630,7 +2676,11 @@ function applyPOPToSide(input, side){
         normalizeGeometryUVToFullBleed(popMesh.geometry);
       }
 
-      popMesh.material = makeAlwaysVisibleImageMaterial(tex);
+      if(popMesh.userData && popMesh.userData.embeddedBackwallTexture){
+        popMesh.material = makeEmbeddedBackwallMaterial(cloneTextureSafe(tex));
+      }else{
+        popMesh.material = makeAlwaysVisibleImageMaterial(tex);
+      }
       popMesh.userData.hasPOP = true;
       popMesh.userData.isPOP = true;
       popMesh.userData.popSide = side;
@@ -2907,7 +2957,11 @@ function reapplyStoredPOPImages(obj){
       if(forcedPlane) pop = forcedPlane;
       if(pop){
         if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(pop.geometry);
-        pop.material = makePersistentPOPMaterial(tex);
+        if(pop.userData && pop.userData.embeddedBackwallTexture){
+          pop.material = makeEmbeddedBackwallMaterial(cloneTextureSafe(tex));
+        }else{
+          pop.material = makeAlwaysVisibleImageMaterial(tex);
+        }
         pop.userData.hasPOP = true;
         lockPOPImageVisible(pop);
       }
@@ -4066,19 +4120,63 @@ function forceUploadedTextureOriginalDirection(mesh){
   tex.needsUpdate = true;
 }
 
+function refreshForcedBackwallImageMirrorState(obj){
+  if(!obj || !obj.mesh || !obj.item) return;
+  const counter = !!obj.item.flipX;
+  obj.mesh.traverse(c=>{
+    if(!c.isMesh || !c.userData) return;
+
+    // 已嵌入板材本體的圖片不能再 scale.x 抵銷，否則會脫離背板。
+    if(c.userData.embeddedBackwallTexture){
+      c.scale.x = 1;
+      if(c.material){
+        c.material.side = THREE.DoubleSide;
+        c.material.depthTest = true;
+        c.material.depthWrite = true;
+        c.material.needsUpdate = true;
+      }
+      return;
+    }
+
+    if(c.userData.forceBackwallImage || c.userData.shapeMaskedBackwallImage){
+      c.scale.x = counter ? -1 : 1;
+      c.userData.counterMirrorForParentFlip = counter;
+      if(c.material){
+        c.material.side = THREE.DoubleSide;
+        c.material.needsUpdate = true;
+      }
+    }
+  });
+}
 function maintainUploadedPOPVisibility(){
   objects.forEach(obj=>{
     if(!obj || !obj.mesh) return;
     obj.mesh.traverse(c=>{
-      if(c.isMesh && c.userData && (c.userData.forceBackwallImage || (c.userData.isPOP && c.userData.hasPOP))){
+      if(c.isMesh && c.userData && (c.userData.embeddedBackwallTexture || c.userData.forceBackwallImage || (c.userData.isPOP && c.userData.hasPOP))){
+        if(c.userData.proxyEmbeddedPanel){
+          c.visible = false;
+          return;
+        }
+
         c.visible = true;
         c.frustumCulled = false;
-        c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
-        if(c.material){
-          c.material.side = THREE.DoubleSide;
-          c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
-          c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
-          c.material.needsUpdate = true;
+
+        if(c.userData.embeddedBackwallTexture){
+          c.renderOrder = 80;
+          if(c.material){
+            c.material.side = THREE.DoubleSide;
+            c.material.depthTest = true;
+            c.material.depthWrite = true;
+            c.material.needsUpdate = true;
+          }
+        }else{
+          c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
+          if(c.material){
+            c.material.side = THREE.DoubleSide;
+            c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
+            c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
+            c.material.needsUpdate = true;
+          }
         }
       }
     });
