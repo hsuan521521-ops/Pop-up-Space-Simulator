@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.9.0</title>
+<title>自製空間模擬系統 Pro v10.9.1</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -1115,8 +1115,8 @@ function makeBlankPOPMaterial(){
     color:0xffffff,
     transparent:true,
     opacity:0,
-    // 圖片面只顯示正面，避免從背面穿透看見鏡像文字。
-    side:THREE.FrontSide,
+    // 圖片面不再用 FrontSide，避免側面因朝向判斷錯誤而看不到。
+    side:THREE.DoubleSide,
     depthTest:false,
     depthWrite:false,
     polygonOffset:true,
@@ -2367,7 +2367,7 @@ function compensatePOPTextureForObjectMirror(tex, obj, popMesh, side){
     popMesh.userData.imageNeverMirror = true;
 
     if(popMesh.material){
-      popMesh.material.side = THREE.FrontSide;
+      popMesh.material.side = THREE.DoubleSide;
       popMesh.material.depthTest = false;
       popMesh.material.depthWrite = false;
       popMesh.material.needsUpdate = true;
@@ -2421,9 +2421,20 @@ function getEscalatorAvailablePOPSides(obj){
 }
 
 function resolveEscalatorUploadSide(obj, requestedSide){
-  // v10.8.9：不再自動左右互換。
-  // 使用者按左側就只找左折板；按右側就只找右折板。
-  // 找不到代表該 L 型沒有那一側，直接不貼，避免圖片跳到錯邊。
+  // v10.9.1：手扶梯 L 型只有一個側板時，側面上傳必須一定找得到實體板。
+  // 使用者按左側/右側，如果該側不存在，就自動貼到目前存在的側板；
+  // 圖片仍嵌入該側板本體，維持斜切形狀遮罩，不建立突出的方形 Plane。
+  if(!obj || !obj.mesh) return requestedSide;
+  if(requestedSide === 'front' || requestedSide === 'back') return requestedSide;
+
+  const requestedPanel = getEscalatorPanelBySide(obj, requestedSide);
+  if(requestedPanel) return requestedSide;
+
+  if(requestedSide === 'left' || requestedSide === 'right'){
+    const opposite = requestedSide === 'left' ? 'right' : 'left';
+    if(getEscalatorPanelBySide(obj, opposite)) return opposite;
+  }
+
   return requestedSide;
 }
 
@@ -2529,7 +2540,7 @@ function configureUploadedTextureOriginalDirection(tex, mirrorX){
 }
 
 function getEscalatorEmbeddedMaterialSide(obj){
-  return getObjectWorldMirrorX(obj) ? THREE.BackSide : THREE.FrontSide;
+  return THREE.DoubleSide;
 }
 
 function cloneTextureSafe(tex){
@@ -2544,7 +2555,7 @@ function makeAlwaysVisibleImageMaterial(tex){
 
   return new THREE.MeshBasicMaterial({
     map: tex,
-    side: THREE.FrontSide,
+    side: THREE.DoubleSide,
     transparent: false,
     opacity: 1,
     depthTest: false,
@@ -2578,7 +2589,7 @@ function makeEmbeddedBackwallMaterial(tex, mirrorX, sideMode){
 
   return new THREE.MeshBasicMaterial({
     map: tex,
-    side: sideMode || THREE.FrontSide,
+    side: THREE.DoubleSide,
     transparent: false,
     opacity: 1,
     depthTest: true,
@@ -2706,7 +2717,9 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
 
   const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
   obj.mesh.userData[key] = panel;
-  if(side === 'front') obj.mesh.userData.popMesh = panel;
+  const actualKey = 'pop' + actualSide.charAt(0).toUpperCase() + actualSide.slice(1);
+  obj.mesh.userData[actualKey] = panel;
+  if(side === 'front' || actualSide === 'front') obj.mesh.userData.popMesh = panel;
 
   return panel;
 }
@@ -2751,7 +2764,7 @@ function lockPOPImageVisible(popMesh){
       popMesh.material.depthTest = true;
       popMesh.material.depthWrite = true;
     }else{
-      popMesh.material.side = THREE.FrontSide;
+      popMesh.material.side = THREE.DoubleSide;
       popMesh.material.depthTest = false;
       popMesh.material.depthWrite = false;
     }
@@ -2833,7 +2846,11 @@ function applyPOPToSide(input, side){
       }
 
       targetObj.item.popImages = targetObj.item.popImages || {};
-      targetObj.item.popImages[side] = canvas.toDataURL('image/png');
+      const storedDataUrl = canvas.toDataURL('image/png');
+      targetObj.item.popImages[side] = storedDataUrl;
+      if(isEscBackwall && targetMesh && targetMesh.userData && targetMesh.userData.popSide && targetMesh.userData.popSide !== side){
+        targetObj.item.popImages[targetMesh.userData.popSide] = storedDataUrl;
+      }
 
       const lbl = document.getElementById('pop-label-' + side);
       if(lbl){
@@ -3054,7 +3071,7 @@ function refreshForcedBackwallImageMirrorState(obj){
       panel.scale.y = 1;
       if(panel.material){
         if(panel.material.map) configureUploadedTextureOriginalDirection(panel.material.map, mirrorX);
-        panel.material.side = sideMode;
+        panel.material.side = THREE.DoubleSide;
         panel.material.depthTest = true;
         panel.material.depthWrite = true;
         panel.material.needsUpdate = true;
