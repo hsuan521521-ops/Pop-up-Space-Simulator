@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.2</title>
+<title>自製空間模擬系統 Pro v10.3</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -341,7 +341,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉；已修正貼圖面正反面。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -2454,7 +2454,7 @@ function makeAlwaysVisibleImageMaterial(tex){
 
   return new THREE.MeshBasicMaterial({
     map: tex,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     transparent: false,
     opacity: 1,
     depthTest: false,
@@ -2518,13 +2518,13 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
     plane.rotation.y = 0;
   }else if(side === 'back'){
     plane.position.set(0, H/2, -eps);
-    plane.rotation.y = Math.PI;
+    plane.rotation.y = 0;
   }else if(side === 'left'){
     plane.position.set(-centerW/2 - eps, H/2, -sideW/2);
-    plane.rotation.y = Math.PI / 2;
+    plane.rotation.y = -Math.PI / 2;
   }else if(side === 'right'){
     plane.position.set(centerW/2 + eps, H/2, -sideW/2);
-    plane.rotation.y = -Math.PI / 2;
+    plane.rotation.y = Math.PI / 2;
   }
 
   obj.mesh.add(plane);
@@ -4066,7 +4066,7 @@ function maintainUploadedPOPVisibility(){
         c.frustumCulled = false;
         c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
         if(c.material){
-          c.material.side = THREE.DoubleSide;
+          if(!c.userData.forceBackwallImage) c.material.side = THREE.DoubleSide;
           c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
           c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
           c.material.needsUpdate = true;
