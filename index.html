@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.8.5</title>
+<title>自製空間模擬系統 Pro v10.8.6</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -2321,17 +2321,26 @@ function findPOPMeshBySide(group, side){
   if(!group) return null;
   const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
 
-  if(group.userData && group.userData[key]) return group.userData[key];
-
+  // Prefer real shape POP over auto rectangular fallback.
   let found = null;
   group.traverse(c => {
     if(found) return;
-    if(c.userData && c.userData.isPOP && c.userData.popSide === side) found = c;
+    if(c.userData && c.userData.isPOP && c.userData.popSide === side && !c.userData.autoBoxPOP) found = c;
+  });
+  if(found) return found;
+
+  if(group.userData && group.userData[key] && !(group.userData[key].userData && group.userData[key].userData.autoBoxPOP)){
+    return group.userData[key];
+  }
+
+  let fallback = null;
+  group.traverse(c => {
+    if(fallback) return;
+    if(c.userData && c.userData.isPOP && c.userData.popSide === side) fallback = c;
   });
 
-  // 冰箱/舊物件可能只有 popMesh，front 時使用它
-  if(!found && side === 'front' && group.userData && group.userData.popMesh) found = group.userData.popMesh;
-  return found;
+  if(!fallback && side === 'front' && group.userData && group.userData.popMesh) fallback = group.userData.popMesh;
+  return fallback;
 }
 
 
@@ -2347,7 +2356,7 @@ function getObjectWorldMirrorX(obj){
 }
 
 function compensatePOPTextureForObjectMirror(tex, obj, popMesh, side){
-  // v10.8.5：圖片永遠不改 UV、不 repeat.x=-1、不 offset.x=1。
+  // v10.8.6：圖片永遠不改 UV、不 repeat.x=-1、不 offset.x=1。
   // 背板可照原本邏輯翻轉；只讓 POP 圖片層做反向補償，並維持可見。
   if(tex){
     tex.wrapS = THREE.ClampToEdgeWrapping;
@@ -2410,58 +2419,133 @@ function worldToLocalPointForPOP(obj, x, y, z){
   return p;
 }
 
+function removeEscalatorRectangularAutoPOP(obj, side){
+  if(!obj || !obj.mesh || !(obj.item && obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return;
+  const kill = [];
+  obj.mesh.traverse(c=>{
+    if(c && c.isMesh && c.userData && c.userData.autoBoxPOP && (!side || c.userData.popSide === side)){
+      kill.push(c);
+    }
+  });
+  kill.forEach(c=>{
+    if(c.parent) c.parent.remove(c);
+    c.geometry && c.geometry.dispose && c.geometry.dispose();
+    c.material && c.material.dispose && c.material.dispose();
+  });
+}
+
+function ensureEscalatorShapePOPMeshForSide(obj, side){
+  if(!obj || !obj.mesh) return null;
+
+  // Existing correct POP shape from addPanelWithPOP is the source of truth.
+  let found = null;
+  obj.mesh.traverse(c=>{
+    if(found) return;
+    if(c && c.isMesh && c.userData && c.userData.isPOP && c.userData.popSide === side && !c.userData.autoBoxPOP){
+      found = c;
+    }
+  });
+  if(found){
+    const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
+    obj.mesh.userData[key] = found;
+    if(side === 'front') obj.mesh.userData.popMesh = found;
+    found.visible = true;
+    found.frustumCulled = false;
+    found.renderOrder = Math.max(found.renderOrder || 0, 100000);
+    return found;
+  }
+
+  // If the original POP was lost, rebuild it from the linked panel's front outline only.
+  // Do NOT use Box3 rectangle, because side panels are slanted polygons.
+  const pair = (typeof getOriginalBackwallPopAndPanel === 'function')
+    ? getOriginalBackwallPopAndPanel(obj, side)
+    : {pop:null, panel:null};
+
+  if(pair && pair.pop){
+    const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
+    obj.mesh.userData[key] = pair.pop;
+    if(side === 'front') obj.mesh.userData.popMesh = pair.pop;
+    return pair.pop;
+  }
+
+  if(pair && pair.panel && pair.panel.geometry){
+    // Extruded panel geometry contains side faces and back faces; using it directly causes rectangular/solid artifacts.
+    // Reconstruct a 2D outline from the front vertices only, then triangulate that outline as a ShapeGeometry.
+    const srcGeo = pair.panel.geometry;
+    const pos = srcGeo.attributes && srcGeo.attributes.position;
+    if(pos && pos.count >= 3){
+      srcGeo.computeBoundingBox();
+      const bb = srcGeo.boundingBox;
+      const frontZ = bb.max.z;
+      const pts = [];
+      const seen = new Set();
+      for(let i=0; i<pos.count; i++){
+        const z = pos.getZ(i);
+        if(Math.abs(z - frontZ) > 0.001) continue;
+        const x = pos.getX(i), y = pos.getY(i);
+        const key = x.toFixed(4) + ',' + y.toFixed(4);
+        if(seen.has(key)) continue;
+        seen.add(key);
+        pts.push(new THREE.Vector2(x, y));
+      }
+
+      if(pts.length >= 3){
+        // Sort points around centroid to recover polygon order.
+        const cx = pts.reduce((s,p)=>s+p.x,0) / pts.length;
+        const cy = pts.reduce((s,p)=>s+p.y,0) / pts.length;
+        pts.sort((a,b)=>Math.atan2(a.y-cy, a.x-cx) - Math.atan2(b.y-cy, b.x-cx));
+
+        const shape = new THREE.Shape();
+        shape.moveTo(pts[0].x, pts[0].y);
+        for(let i=1;i<pts.length;i++) shape.lineTo(pts[i].x, pts[i].y);
+        shape.closePath();
+
+        const geo = normalizeGeometryUVToFullBleed(new THREE.ShapeGeometry(shape));
+        const mesh = new THREE.Mesh(geo, makeBlankPOPMaterial());
+        mesh.position.copy(pair.panel.position);
+        mesh.rotation.copy(pair.panel.rotation);
+        mesh.scale.copy(pair.panel.scale);
+
+        const n = new THREE.Vector3(0,0,1).applyEuler(mesh.rotation).normalize();
+        mesh.position.add(n.multiplyScalar(1.2 * U));
+
+        mesh.userData.isPOP = true;
+        mesh.userData.popSide = side;
+        mesh.userData.panelName = pair.panel.userData && pair.panel.userData.panelName;
+        mesh.userData.linkedPanel = pair.panel;
+        mesh.userData.autoCreatedPOP = true;
+        mesh.userData.shapeMaskedBackwallImage = true;
+        mesh.renderOrder = 100000;
+        mesh.frustumCulled = false;
+        obj.mesh.add(mesh);
+
+        const udKey = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
+        obj.mesh.userData[udKey] = mesh;
+        if(side === 'front') obj.mesh.userData.popMesh = mesh;
+        return mesh;
+      }
+    }
+  }
+
+  return null;
+}
+
+
 function ensurePOPMeshForSide(obj, side){
   if(!obj || !obj.mesh) return null;
+
+  const isEscBackwall = !!(obj.item && obj.item.shape && obj.item.shape.indexOf('escalator_') === 0);
+
+  // v10.8.6 根本修正：
+  // 手扶梯背板只能使用「斜切 Shape POP 面」，不能用 Box3 自動補的四方形 Plane。
+  if(isEscBackwall){
+    return ensureEscalatorShapePOPMeshForSide(obj, side);
+  }
 
   let popMesh = findPOPMeshBySide(obj.mesh, side);
   if(popMesh) return popMesh;
 
-  const isEscBackwall = !!(obj.item && obj.item.shape && obj.item.shape.indexOf('escalator_') === 0);
-
-  // v10.8.5：手扶梯背板一定優先用原本板面的 Shape POP 建立。
-  // 不用整個物件 bounding box 自動補面，避免圖片跑到背板後面或巨大錯位。
-  if(isEscBackwall){
-    const pair = (typeof getOriginalBackwallPopAndPanel === 'function')
-      ? getOriginalBackwallPopAndPanel(obj, side)
-      : {pop:null, panel:null};
-
-    if(pair && pair.pop){
-      const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
-      obj.mesh.userData[key] = pair.pop;
-      if(side === 'front') obj.mesh.userData.popMesh = pair.pop;
-      return pair.pop;
-    }
-
-    if(pair && pair.panel && pair.panel.geometry){
-      const geo = pair.panel.geometry.clone();
-      if(typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(geo);
-
-      const mesh = new THREE.Mesh(geo, makeBlankPOPMaterial());
-      mesh.position.copy(pair.panel.position);
-      mesh.rotation.copy(pair.panel.rotation);
-      mesh.scale.copy(pair.panel.scale);
-
-      // 往該板正面推出，貼在板材外側。
-      const n = new THREE.Vector3(0,0,1).applyEuler(mesh.rotation).normalize();
-      mesh.position.add(n.multiplyScalar(1.2 * U));
-
-      mesh.userData.isPOP = true;
-      mesh.userData.popSide = side;
-      mesh.userData.panelName = pair.panel.userData && pair.panel.userData.panelName;
-      mesh.userData.linkedPanel = pair.panel;
-      mesh.userData.autoCreatedPOP = true;
-      mesh.renderOrder = 100000;
-      mesh.frustumCulled = false;
-      obj.mesh.add(mesh);
-
-      const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
-      obj.mesh.userData[key] = mesh;
-      if(side === 'front') obj.mesh.userData.popMesh = mesh;
-      return mesh;
-    }
-  }
-
-  // 一般物件 fallback：找不到貼圖面時，自動補一片透明貼圖面。
+  // 一般物件 fallback：找不到貼圖面時才用矩形補面。
   const box = new THREE.Box3().setFromObject(obj.mesh);
   if(!isFinite(box.min.x) || !isFinite(box.max.x)) return null;
 
@@ -2491,6 +2575,7 @@ function ensurePOPMeshForSide(obj, side){
   mesh.userData.isPOP = true;
   mesh.userData.popSide = side;
   mesh.userData.autoCreatedPOP = true;
+  mesh.userData.autoBoxPOP = true;
   mesh.renderOrder = 999;
   mesh.frustumCulled = false;
   obj.mesh.add(mesh);
@@ -2559,21 +2644,19 @@ function getEscalatorPanelSize(obj, side){
 
 
 function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
-  // v10.8.5：不建立 scene-root 獨立物件，也不把圖片直接塞到板材本體。
-  // 一律使用 / 建立原本物件內的 POP 面，避免上傳後找不到接收 Mesh。
+  // v10.8.6：圖片只貼在手扶梯背板原始 Shape POP 面。
+  // 禁止使用矩形 fallback，否則側面斜切板會變成完整四方形照片。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
   if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
 
   if(typeof removeFloatingBackwallImagePlanes === 'function') removeFloatingBackwallImagePlanes(obj, side);
+  removeEscalatorRectangularAutoPOP(obj, side);
 
-  let target = null;
-  const pair = (typeof getOriginalBackwallPopAndPanel === 'function')
-    ? getOriginalBackwallPopAndPanel(obj, side)
-    : {pop:null, panel:null};
-
-  if(pair && pair.pop) target = pair.pop;
-  if(!target) target = ensurePOPMeshForSide(obj, side);
-  if(!target) return null;
+  const target = ensureEscalatorShapePOPMeshForSide(obj, side);
+  if(!target){
+    console.error('Escalator backwall POP shape not found', {side, item:obj.item, userData:obj.mesh && obj.mesh.userData});
+    return null;
+  }
 
   if(target.geometry && typeof normalizeGeometryUVToFullBleed === 'function'){
     normalizeGeometryUVToFullBleed(target.geometry);
@@ -2589,6 +2672,7 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
   target.userData.forceBackwallImage = true;
   target.userData.lockVisible = true;
   target.userData.imageNeverMirror = true;
+  target.userData.shapeMaskedBackwallImage = true;
 
   compensatePOPTextureForObjectMirror(target.material && target.material.map, obj, target, side);
 
@@ -2600,7 +2684,7 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
 }
 
 function applyTextureToBackwallBody(obj, side, tex){
-  // v10.8.5：手扶梯背板圖片只走原 POP 面，避免本體材質和 POP 圖片疊加互相鏡像。
+  // v10.8.6：手扶梯背板圖片只走原 POP 面，避免本體材質和 POP 圖片疊加互相鏡像。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return;
   if(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0) return;
 
@@ -2894,9 +2978,9 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
   scene.add(newMesh);
   obj.mesh = newMesh;
 
-  // v10.8.5：手扶梯背板每次重建後，先確保 POP 面存在，再重新套回已儲存圖片。
+  // v10.8.6：手扶梯背板每次重建後，先確保 POP 面存在，再重新套回已儲存圖片。
   if(obj.item && obj.item.shape && obj.item.shape.indexOf('escalator_') === 0){
-    ['front','left','right','back'].forEach(side=>ensurePOPMeshForSide(obj, side));
+    ['front','left','right','back'].forEach(side=>ensureEscalatorShapePOPMeshForSide(obj, side));
   }
 
   reapplyStoredPOPImages(obj);
@@ -2907,7 +2991,8 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
 function refreshForcedBackwallImageMirrorState(obj){
   if(!obj || !obj.mesh || !obj.item) return;
   ['front','left','right','back'].forEach(side=>{
-    const pop = ensurePOPMeshForSide(obj, side);
+    const isEscBackwall = obj.item && obj.item.shape && obj.item.shape.indexOf('escalator_') === 0;
+    const pop = isEscBackwall ? ensureEscalatorShapePOPMeshForSide(obj, side) : ensurePOPMeshForSide(obj, side);
     if(!pop) return;
     const tex = pop.material && pop.material.map;
     compensatePOPTextureForObjectMirror(tex, obj, pop, side);
@@ -2920,7 +3005,7 @@ function refreshSelectedPOPTextureOrientation(){ refreshAllPOPTextureOrientation
 function flipSelectedEscalatorBackwall(){
   if(!selectedObj || !isEscalatorBackwallItem(selectedObj.item)) return;
 
-  // v10.8.5：背板鏡面翻轉恢復原本邏輯，只翻背板，不翻上傳圖片。
+  // v10.8.6：背板鏡面翻轉恢復原本邏輯，只翻背板，不翻上傳圖片。
   selectedObj.item.flipX = !selectedObj.item.flipX;
   selectedObj.mesh.scale.x *= -1;
   selectedObj.mesh.updateMatrixWorld(true);
@@ -2937,7 +3022,7 @@ function swapSelectedEscalatorBackwallSide(){
   if(!selectedObj || !isEscalatorBackwallItem(selectedObj.item)) return;
   const shape = selectedObj.item.shape || '';
 
-  // v10.8.5：左右對調邏輯維持原本版本，不和圖片邏輯綁在一起。
+  // v10.8.6：左右對調邏輯維持原本版本，不和圖片邏輯綁在一起。
   // L 型：左折 / 右折直接對調模板。
   // ㄣ型或舊版包覆背板：維持原本 flipX 狀態切換邏輯。
   if(shape.includes('_left')){
