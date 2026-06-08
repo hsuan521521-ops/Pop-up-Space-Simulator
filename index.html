@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v9.7</title>
+<title>自製空間模擬系統 Pro v9.8</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -331,7 +331,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但圖片永遠以可視面正向顯示，不會鏡像或左右顛倒。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -2315,57 +2315,19 @@ function findPOPMeshBySide(group, side){
 
 
 function getObjectWorldMirrorX(obj){
-  if(!obj || !obj.mesh) return false;
-  obj.mesh.updateMatrixWorld(true);
-  const m = new THREE.Matrix4().copy(obj.mesh.matrixWorld);
-  return m.determinant() < 0;
-}
-
-function getPOPSideDirection(side){
-  if(side === 'front') return new THREE.Vector3(0,0,1);
-  if(side === 'back')  return new THREE.Vector3(0,0,-1);
-  if(side === 'left')  return new THREE.Vector3(-1,0,0);
-  if(side === 'right') return new THREE.Vector3(1,0,0);
-  return new THREE.Vector3(0,0,1);
-}
-
-function isPOPFaceViewedFromBack(popMesh){
-  if(!popMesh || !camera) return false;
-  popMesh.updateMatrixWorld(true);
-
-  const normal = new THREE.Vector3(0,0,1).transformDirection(popMesh.matrixWorld).normalize();
-  const pos = new THREE.Vector3();
-  popMesh.getWorldPosition(pos);
-  const toCamera = camera.position.clone().sub(pos).normalize();
-
-  // dot < 0 代表我們看到的是這片 plane 的背面；需要修正 UV，避免圖片反向。
-  return normal.dot(toCamera) < 0;
+  return false;
 }
 
 function compensatePOPTextureForObjectMirror(tex, obj, popMesh, side){
-  // 規則：背板/模型可以鏡像或左右對調，但上傳圖片永遠正向呈現在可視畫面。
-  // 所以不是單純跟著物件 scale 翻，而是根據「目前可視面」補償 UV。
-  let flipU = false;
-
-  if(obj && obj.item && isEscalatorBackwallItem(obj.item)){
-    flipU = getObjectWorldMirrorX(obj);
-    if(isPOPFaceViewedFromBack(popMesh)) flipU = !flipU;
-
-    // 左右折板因為本身旋轉 90 度，左右面要再做一次側向補償。
-    if(side === 'left' || side === 'right'){
-      const worldMirror = getObjectWorldMirrorX(obj);
-      flipU = worldMirror ? !flipU : flipU;
-    }
-  }else{
-    flipU = getObjectWorldMirrorX(obj);
-  }
-
-  tex.wrapS = flipU ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+  // 重要規則：
+  // 使用者上傳的圖片永遠保持原始方向。
+  // 不因背板鏡面、左右對調、模型旋轉、視角旋轉而做任何 UV 翻轉或旋轉。
+  tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.repeat.x = flipU ? -1 : 1;
-  tex.offset.x = flipU ? 1 : 0;
-  tex.repeat.y = 1;
-  tex.offset.y = 0;
+  tex.repeat.set(1, 1);
+  tex.offset.set(0, 0);
+  tex.rotation = 0;
+  tex.center.set(0, 0);
   tex.needsUpdate = true;
 }
 
@@ -2375,48 +2337,13 @@ function refreshAllPOPTextureOrientation(obj){
   ['front','left','right','back'].forEach(side=>{
     const pop = findPOPMeshBySide(target.mesh, side);
     const tex = pop && pop.material && pop.material.map;
-    if(tex){ compensatePOPTextureForObjectMirror(tex, target, pop, side); lockPOPImageVisible(pop); }
+    if(tex){
+      compensatePOPTextureForObjectMirror(tex, target, pop, side);
+      lockPOPImageVisible(pop);
+    }
   });
 }
 
-
-
-function makePersistentPOPMaterial(tex){
-  // 上傳圖片後必須一直顯示：不受旋轉視角、透明排序、背面剔除影響
-  tex.wrapS = tex.wrapS || THREE.ClampToEdgeWrapping;
-  tex.wrapT = tex.wrapT || THREE.ClampToEdgeWrapping;
-  tex.needsUpdate = true;
-
-  return new THREE.MeshBasicMaterial({
-    map: tex,
-    side: THREE.DoubleSide,
-    transparent: false,
-    opacity: 1,
-    alphaTest: 0.01,
-    depthWrite: true,
-    depthTest: true,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-    polygonOffsetUnits: -4
-  });
-}
-
-function lockPOPImageVisible(popMesh){
-  if(!popMesh) return;
-  popMesh.visible = true;
-  popMesh.frustumCulled = false;
-  popMesh.renderOrder = 999;
-  popMesh.userData.hasPOP = true;
-  popMesh.userData.lockVisible = true;
-  if(popMesh.material){
-    popMesh.material.side = THREE.DoubleSide;
-    popMesh.material.transparent = false;
-    popMesh.material.opacity = 1;
-    popMesh.material.depthWrite = true;
-    popMesh.material.depthTest = true;
-    popMesh.material.needsUpdate = true;
-  }
-}
 
 function applyPOPToSide(input, side){
   if(!selectedObj || !input.files[0]) return;
@@ -3395,9 +3322,6 @@ function updateCamera(){
   camera.position.y=cameraRadius*Math.sin(cameraPhi);
   camera.position.z=cameraTarget.z+cameraRadius*Math.cos(cameraTheta)*Math.cos(cameraPhi);
   camera.lookAt(cameraTarget);
-  if(typeof refreshAllPOPTextureOrientation === 'function' && selectedObj && selectedObj.item && isEscalatorBackwallItem(selectedObj.item)){
-    refreshAllPOPTextureOrientation(selectedObj);
-  }
 }
 
 function onKeyDown(e){
@@ -3810,11 +3734,25 @@ function updateDimensionDisplayIfNeeded(){
 
 
 
+
+function forceUploadedTextureOriginalDirection(mesh){
+  if(!mesh || !mesh.material || !mesh.material.map) return;
+  const tex = mesh.material.map;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(1, 1);
+  tex.offset.set(0, 0);
+  tex.rotation = 0;
+  tex.center.set(0, 0);
+  tex.needsUpdate = true;
+}
+
 function maintainUploadedPOPVisibility(){
   objects.forEach(obj=>{
     if(!obj || !obj.mesh) return;
     obj.mesh.traverse(c=>{
       if(c.isMesh && c.userData && c.userData.isPOP && c.userData.hasPOP){
+        forceUploadedTextureOriginalDirection(c);
         lockPOPImageVisible(c);
       }
     });
