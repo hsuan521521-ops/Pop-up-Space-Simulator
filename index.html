@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v9.3</title>
+<title>自製空間模擬系統 Pro v9.4</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -331,7 +331,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：正面＝中板，左側＝左折板，右側＝右折板；這是3D立體折板，不是平面</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：正面＝中板，左側＝左折板，右側＝右折板；圖片會滿版鋪滿整片斜切板</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -342,7 +342,7 @@
             </div>
             <!-- 四面圖片上傳 -->
             <div id="pop-multi" style="display:none;display:flex;flex-direction:column;gap:5px;">
-              <div style="font-size:10px;color:var(--text3);margin-bottom:2px;">四面各自上傳，未上傳的面透明</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:2px;">四面各自上傳，圖片會滿版鋪滿該面，未上傳的面透明</div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <span style="font-size:11px;color:var(--text2);width:28px;flex-shrink:0;">正面</span>
                 <label style="flex:1;background:var(--panel2);border:1px dashed var(--accent);border-radius:5px;padding:5px 6px;text-align:center;cursor:pointer;font-size:10px;color:var(--accent);" id="pop-label-front">
@@ -1168,16 +1168,35 @@ function ensureFourSidePOP(group, item, w, d, h){
 
 
 
+
+function normalizeGeometryUVToFullBleed(geo){
+  // 讓不規則斜切板的貼圖滿版鋪滿整片板，不再只出現在角落。
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  const sizeX = Math.max(0.0001, bb.max.x - bb.min.x);
+  const sizeY = Math.max(0.0001, bb.max.y - bb.min.y);
+  const pos = geo.attributes.position;
+  const uvs = [];
+  for(let i=0; i<pos.count; i++){
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    uvs.push((x - bb.min.x) / sizeX, (y - bb.min.y) / sizeY);
+  }
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.attributes.uv.needsUpdate = true;
+  return geo;
+}
+
 function makePanelShapeGeometryFromPoints(points, thickness){
   const shape = new THREE.Shape();
   shape.moveTo(points[0][0], points[0][1]);
   for(let i=1;i<points.length;i++) shape.lineTo(points[i][0], points[i][1]);
   shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, {
+  const geo = normalizeGeometryUVToFullBleed(new THREE.ExtrudeGeometry(shape, {
     depth: thickness,
     bevelEnabled: false,
     curveSegments: 1
-  });
+  }));
   // 讓厚度中心落在 z=0，方便旋轉折板
   geo.translate(0, 0, -thickness/2);
   return geo;
@@ -1204,7 +1223,7 @@ function addPanelWithPOP(group, cfg){
   shape.moveTo(points[0][0], points[0][1]);
   for(let i=1;i<points.length;i++) shape.lineTo(points[i][0], points[i][1]);
   shape.closePath();
-  const popGeo = new THREE.ShapeGeometry(shape);
+  const popGeo = normalizeGeometryUVToFullBleed(new THREE.ShapeGeometry(shape));
   const pop = new THREE.Mesh(popGeo, makeBlankPOPMaterial());
   pop.position.copy(position);
   pop.rotation.y = rotationY;
@@ -2323,7 +2342,17 @@ function applyPOPToSide(input, side){
       tex.needsUpdate = true;
       const popMesh = findPOPMeshBySide(selectedObj.mesh, side);
       if(popMesh){
-        popMesh.material = new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide, transparent: false});
+        if(popMesh.geometry) normalizeGeometryUVToFullBleed(popMesh.geometry);
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.offset.set(0, 0);
+        tex.repeat.set(1, 1);
+        popMesh.material = new THREE.MeshBasicMaterial({
+          map: tex,
+          side: THREE.DoubleSide,
+          transparent: true,
+          depthWrite: false
+        });
         popMesh.material.needsUpdate = true;
         popMesh.userData.hasPOP = true;
         const lbl = document.getElementById('pop-label-' + side);
