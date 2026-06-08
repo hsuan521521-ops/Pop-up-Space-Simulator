@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v9.5</title>
+<title>自製空間模擬系統 Pro v9.7</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -331,7 +331,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉背板，但圖片方向不會鏡像。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但圖片永遠以可視面正向顯示，不會鏡像或左右顛倒。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -1460,7 +1460,7 @@ function buildMesh(item, color){
 
       // POP 前板（正面，覆蓋底座）
       const popGeo = new THREE.PlaneGeometry(w*0.97, baseH*0.92);
-      const popMat = new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide});
+      const popMat = new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.DoubleSide});
       const popMesh = new THREE.Mesh(popGeo, popMat);
       popMesh.position.set(0, baseH/2, d/2+0.1*U);
       popMesh.userData.isPOP=true; popMesh.userData.popSide='front';
@@ -1526,7 +1526,7 @@ function buildMesh(item, color){
 
       // POP 面（底座三面）
       const pF = new THREE.Mesh(new THREE.PlaneGeometry(w*0.97, bH*0.93),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
+        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.DoubleSide}));
       pF.position.set(0, bH/2, d/2+0.8*U);
       pF.userData.isPOP=true; pF.userData.popSide='front'; group.add(pF);
 
@@ -1596,7 +1596,7 @@ function buildMesh(item, color){
 
       // POP 前板
       const popMesh3 = new THREE.Mesh(new THREE.PlaneGeometry(w*0.96, boxH*0.92),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
+        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.DoubleSide}));
       popMesh3.position.set(0, boxBase+boxH/2, d/2+0.8*U);
       popMesh3.userData.isPOP=true; popMesh3.userData.popSide='front'; group.add(popMesh3);
 
@@ -1819,7 +1819,7 @@ function buildMesh(item, color){
       // POP 三面（正面、左側、右側）
       const chBodyH = h*0.85;
       const cpF = new THREE.Mesh(new THREE.PlaneGeometry(w*0.97, chBodyH*0.88),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
+        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.DoubleSide}));
       cpF.position.set(0, h*0.43, d/2+0.8*U);
       cpF.userData.isPOP=true; cpF.userData.popSide='front'; group.add(cpF);
       const cpL = new THREE.Mesh(new THREE.PlaneGeometry(d*0.97, chBodyH*0.88),
@@ -1898,7 +1898,7 @@ function buildMesh(item, color){
       group.add(board);
       // 正面 POP 貼面
       const popF = new THREE.Mesh(new THREE.PlaneGeometry(w*0.99, h*0.99),
-        new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, side:THREE.FrontSide}));
+        new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.0, side:THREE.DoubleSide}));
       popF.position.set(0, h/2, d/2 + 0.05*U);
       popF.userData.isPOP = true; popF.userData.popSide = 'front';
       group.add(popF);
@@ -1922,7 +1922,7 @@ function buildMesh(item, color){
       archTop.position.set(0, Math.max(bodyH,1*U), 0); group.add(archTop);
       // POP 正面
       const popArch = new THREE.Mesh(new THREE.PlaneGeometry(w*0.97, h*0.97),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
+        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.DoubleSide}));
       popArch.position.set(0, h/2, d/2+0.1*U);
       popArch.userData.isPOP=true; popArch.userData.popSide='front';
       group.add(popArch); group.userData.popFront=popArch;
@@ -1941,7 +1941,7 @@ function buildMesh(item, color){
       lSide.position.set(mainW/2, sideH/2, 0); group.add(lSide);
       // POP 正面（主板）
       const popL = new THREE.Mesh(new THREE.PlaneGeometry(mainW*0.97, h*0.97),
-        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.FrontSide}));
+        new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.0,side:THREE.DoubleSide}));
       popL.position.set(-sideW/2, h/2, d/2+0.1*U);
       popL.userData.isPOP=true; popL.userData.popSide='front';
       group.add(popL); group.userData.popFront=popL;
@@ -2317,28 +2317,105 @@ function findPOPMeshBySide(group, side){
 function getObjectWorldMirrorX(obj){
   if(!obj || !obj.mesh) return false;
   obj.mesh.updateMatrixWorld(true);
-  const e = obj.mesh.matrixWorld.elements;
-  // Negative determinant means mirrored transform.
   const m = new THREE.Matrix4().copy(obj.mesh.matrixWorld);
   return m.determinant() < 0;
 }
 
-function compensatePOPTextureForObjectMirror(tex, obj){
-  // 背板可以鏡面翻轉，但圖片不可以跟著被鏡像。
-  // 若物件世界矩陣是負 determinant，反向補償貼圖 UV。
-  if(getObjectWorldMirrorX(obj)){
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.repeat.x = -1;
-    tex.offset.x = 1;
+function getPOPSideDirection(side){
+  if(side === 'front') return new THREE.Vector3(0,0,1);
+  if(side === 'back')  return new THREE.Vector3(0,0,-1);
+  if(side === 'left')  return new THREE.Vector3(-1,0,0);
+  if(side === 'right') return new THREE.Vector3(1,0,0);
+  return new THREE.Vector3(0,0,1);
+}
+
+function isPOPFaceViewedFromBack(popMesh){
+  if(!popMesh || !camera) return false;
+  popMesh.updateMatrixWorld(true);
+
+  const normal = new THREE.Vector3(0,0,1).transformDirection(popMesh.matrixWorld).normalize();
+  const pos = new THREE.Vector3();
+  popMesh.getWorldPosition(pos);
+  const toCamera = camera.position.clone().sub(pos).normalize();
+
+  // dot < 0 代表我們看到的是這片 plane 的背面；需要修正 UV，避免圖片反向。
+  return normal.dot(toCamera) < 0;
+}
+
+function compensatePOPTextureForObjectMirror(tex, obj, popMesh, side){
+  // 規則：背板/模型可以鏡像或左右對調，但上傳圖片永遠正向呈現在可視畫面。
+  // 所以不是單純跟著物件 scale 翻，而是根據「目前可視面」補償 UV。
+  let flipU = false;
+
+  if(obj && obj.item && isEscalatorBackwallItem(obj.item)){
+    flipU = getObjectWorldMirrorX(obj);
+    if(isPOPFaceViewedFromBack(popMesh)) flipU = !flipU;
+
+    // 左右折板因為本身旋轉 90 度，左右面要再做一次側向補償。
+    if(side === 'left' || side === 'right'){
+      const worldMirror = getObjectWorldMirrorX(obj);
+      flipU = worldMirror ? !flipU : flipU;
+    }
   }else{
-    tex.wrapS = THREE.ClampToEdgeWrapping;
-    tex.repeat.x = 1;
-    tex.offset.x = 0;
+    flipU = getObjectWorldMirrorX(obj);
   }
+
+  tex.wrapS = flipU ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.x = flipU ? -1 : 1;
+  tex.offset.x = flipU ? 1 : 0;
   tex.repeat.y = 1;
   tex.offset.y = 0;
   tex.needsUpdate = true;
+}
+
+function refreshAllPOPTextureOrientation(obj){
+  const target = obj || selectedObj;
+  if(!target) return;
+  ['front','left','right','back'].forEach(side=>{
+    const pop = findPOPMeshBySide(target.mesh, side);
+    const tex = pop && pop.material && pop.material.map;
+    if(tex){ compensatePOPTextureForObjectMirror(tex, target, pop, side); lockPOPImageVisible(pop); }
+  });
+}
+
+
+
+function makePersistentPOPMaterial(tex){
+  // 上傳圖片後必須一直顯示：不受旋轉視角、透明排序、背面剔除影響
+  tex.wrapS = tex.wrapS || THREE.ClampToEdgeWrapping;
+  tex.wrapT = tex.wrapT || THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+
+  return new THREE.MeshBasicMaterial({
+    map: tex,
+    side: THREE.DoubleSide,
+    transparent: false,
+    opacity: 1,
+    alphaTest: 0.01,
+    depthWrite: true,
+    depthTest: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4
+  });
+}
+
+function lockPOPImageVisible(popMesh){
+  if(!popMesh) return;
+  popMesh.visible = true;
+  popMesh.frustumCulled = false;
+  popMesh.renderOrder = 999;
+  popMesh.userData.hasPOP = true;
+  popMesh.userData.lockVisible = true;
+  if(popMesh.material){
+    popMesh.material.side = THREE.DoubleSide;
+    popMesh.material.transparent = false;
+    popMesh.material.opacity = 1;
+    popMesh.material.depthWrite = true;
+    popMesh.material.depthTest = true;
+    popMesh.material.needsUpdate = true;
+  }
 }
 
 function applyPOPToSide(input, side){
@@ -2366,21 +2443,17 @@ function applyPOPToSide(input, side){
       tex.magFilter   = THREE.LinearFilter;
       tex.generateMipmaps = false;
       tex.needsUpdate = true;
-      compensatePOPTextureForObjectMirror(tex, selectedObj);
       const popMesh = findPOPMeshBySide(selectedObj.mesh, side);
       if(popMesh){
+        compensatePOPTextureForObjectMirror(tex, selectedObj, popMesh, side);
         if(popMesh.geometry) normalizeGeometryUVToFullBleed(popMesh.geometry);
         tex.wrapS = THREE.ClampToEdgeWrapping;
         tex.wrapT = THREE.ClampToEdgeWrapping;
         tex.offset.set(0, 0);
         tex.repeat.set(1, 1);
-        popMesh.material = new THREE.MeshBasicMaterial({
-          map: tex,
-          side: THREE.DoubleSide,
-          transparent: true,
-          depthWrite: false
-        });
+        popMesh.material = makePersistentPOPMaterial(tex);
         popMesh.material.needsUpdate = true;
+        lockPOPImageVisible(popMesh);
         popMesh.userData.hasPOP = true;
         const lbl = document.getElementById('pop-label-' + side);
         if(lbl){ lbl.style.borderColor='var(--green,#7eb87a)'; lbl.style.color='var(--green,#7eb87a)'; lbl.childNodes[0].textContent='✓ 已上傳'; }
@@ -2548,14 +2621,7 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
 }
 
 
-function refreshSelectedPOPTextureOrientation(){
-  if(!selectedObj) return;
-  ['front','left','right','back'].forEach(side=>{
-    const pop = findPOPMeshBySide(selectedObj.mesh, side);
-    const tex = pop && pop.material && pop.material.map;
-    if(tex) compensatePOPTextureForObjectMirror(tex, selectedObj);
-  });
-}
+function refreshSelectedPOPTextureOrientation(){ refreshAllPOPTextureOrientation(selectedObj); }
 
 function flipSelectedEscalatorBackwall(){
   if(!selectedObj || !isEscalatorBackwallItem(selectedObj.item)) return;
@@ -2649,7 +2715,9 @@ function selectObject(obj){
     ['front','left','right','back'].forEach(side=>{
       const lbl = document.getElementById('pop-label-'+side);
       if(lbl){
-        const hasTex = findPOPMeshBySide(obj.mesh, side)?.userData?.hasPOP;
+        const popSideMesh = findPOPMeshBySide(obj.mesh, side);
+        const hasTex = popSideMesh?.userData?.hasPOP;
+        if(hasTex) lockPOPImageVisible(popSideMesh);
         lbl.style.borderColor = hasTex ? 'var(--green,#7eb87a)' : 'var(--accent)';
         lbl.style.color       = hasTex ? 'var(--green,#7eb87a)' : 'var(--accent)';
         lbl.childNodes[0].textContent = hasTex ? '✓ 已上傳' : '🖼 上傳';
@@ -2658,6 +2726,7 @@ function selectObject(obj){
   }
   updateSceneList();
   buildGizmo(obj);
+  refreshAllPOPTextureOrientation(obj);
 }
 
 function deselectAll(){
@@ -2847,14 +2916,17 @@ function setPOPHover(mesh){
   if(hoveredPOPMesh && hoveredPOPMesh !== mesh){
     hoveredPOPMesh.material = hoveredPOPMesh.material.clone();
     hoveredPOPMesh.material.opacity = hoveredPOPMesh.userData.hasPOP ? 1.0 : 0.0;
-    hoveredPOPMesh.material.transparent = !hoveredPOPMesh.userData.hasPOP;
+    hoveredPOPMesh.material.transparent = hoveredPOPMesh.userData.hasPOP ? false : true;
+    hoveredPOPMesh.material.side = THREE.DoubleSide;
   }
   hoveredPOPMesh = mesh;
   if(mesh){
     mesh.material = mesh.material.clone();
     if(mesh.userData.hasPOP){
-      // already has image — add subtle bright overlay
-      mesh.material.opacity = 0.85;
+      // 已上傳圖片的面不要改透明度，避免旋轉視角後看起來消失
+      mesh.material.opacity = 1.0;
+      mesh.material.transparent = false;
+      mesh.material.side = THREE.DoubleSide;
     } else {
       // empty face — show semi-transparent grey hint
       mesh.material.color.set(0xaaaaaa);
@@ -2868,7 +2940,8 @@ function clearPOPHover(){
   if(hoveredPOPMesh){
     hoveredPOPMesh.material = hoveredPOPMesh.material.clone();
     hoveredPOPMesh.material.opacity = hoveredPOPMesh.userData.hasPOP ? 1.0 : 0.0;
-    hoveredPOPMesh.material.transparent = !hoveredPOPMesh.userData.hasPOP;
+    hoveredPOPMesh.material.transparent = hoveredPOPMesh.userData.hasPOP ? false : true;
+    hoveredPOPMesh.material.side = THREE.DoubleSide;
     if(!hoveredPOPMesh.userData.hasPOP) hoveredPOPMesh.material.color.set(0xffffff);
     hoveredPOPMesh = null;
   }
@@ -3322,6 +3395,9 @@ function updateCamera(){
   camera.position.y=cameraRadius*Math.sin(cameraPhi);
   camera.position.z=cameraTarget.z+cameraRadius*Math.cos(cameraTheta)*Math.cos(cameraPhi);
   camera.lookAt(cameraTarget);
+  if(typeof refreshAllPOPTextureOrientation === 'function' && selectedObj && selectedObj.item && isEscalatorBackwallItem(selectedObj.item)){
+    refreshAllPOPTextureOrientation(selectedObj);
+  }
 }
 
 function onKeyDown(e){
@@ -3733,9 +3809,23 @@ function updateDimensionDisplayIfNeeded(){
 }
 
 
+
+function maintainUploadedPOPVisibility(){
+  objects.forEach(obj=>{
+    if(!obj || !obj.mesh) return;
+    obj.mesh.traverse(c=>{
+      if(c.isMesh && c.userData && c.userData.isPOP && c.userData.hasPOP){
+        lockPOPImageVisible(c);
+      }
+    });
+  });
+}
+
+
 // ===================== ANIMATE =====================
 function animate(){
   requestAnimationFrame(animate);
+  maintainUploadedPOPVisibility();
   renderer.render(scene,camera);
 }
 
