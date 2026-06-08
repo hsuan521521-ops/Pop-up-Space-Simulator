@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.5</title>
+<title>自製空間模擬系統 Pro v10.2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -341,7 +341,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，並依背板斜切外型裁切，不會露出矩形四角。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -1217,7 +1217,7 @@ function addPanelWithPOP(group, cfg){
     name, side, points, thickness, material,
     position = new THREE.Vector3(),
     rotationY = 0,
-    popOffset = 0.9 * U
+    popOffset = 1.8 * U
   } = cfg;
 
   const geo = makePanelShapeGeometryFromPoints(points, thickness);
@@ -2454,7 +2454,7 @@ function makeAlwaysVisibleImageMaterial(tex){
 
   return new THREE.MeshBasicMaterial({
     map: tex,
-    side: THREE.FrontSide,
+    side: THREE.DoubleSide,
     transparent: false,
     opacity: 1,
     depthTest: false,
@@ -2476,146 +2476,80 @@ function getEscalatorPanelSize(obj, side){
   };
 }
 
-
-function makeShapeFromPoints(points){
-  const shape = new THREE.Shape();
-  shape.moveTo(points[0][0], points[0][1]);
-  for(let i=1; i<points.length; i++) shape.lineTo(points[i][0], points[i][1]);
-  shape.closePath();
-  return shape;
-}
-
-function makeBackwallImageShapeGeometry(points){
-  // 圖片面使用與手扶梯背板相同的斜切輪廓，不再使用矩形 PlaneGeometry。
-  const geo = new THREE.ShapeGeometry(makeShapeFromPoints(points));
-  if(typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(geo);
-  return geo;
-}
-
-function getEscalatorBackwallPanelConfig(obj, side){
-  const item = obj?.item || {};
-  const centerW = (item.centerW || item.w || 176) * U;
-  const sideW   = (item.sideW || item.d || 199) * U;
-  const H       = (item.h || 223) * U;
-  const lowH    = (item.lowH || 116) * U;
-  const topFlat = (item.topFlat || 22) * U;
-  const eps     = 6 * U;
-
-  const centerPts = [
-    [-centerW/2, 0],
-    [ centerW/2, 0],
-    [ centerW/2, H],
-    [-centerW/2, H]
-  ];
-
-  const leftPts = [
-    [0, 0],
-    [sideW, 0],
-    [sideW, H],
-    [sideW - topFlat, H],
-    [0, lowH]
-  ];
-
-  const rightPts = [
-    [0, 0],
-    [sideW, 0],
-    [sideW, lowH],
-    [topFlat, H],
-    [0, H]
-  ];
-
-  if(side === 'left'){
-    return {
-      points:leftPts,
-      position:new THREE.Vector3(-centerW/2 - eps, 0, 0),
-      rotationY:-Math.PI/2
-    };
-  }
-
-  if(side === 'right'){
-    return {
-      points:rightPts,
-      position:new THREE.Vector3(centerW/2 + eps, 0, 0),
-      rotationY:Math.PI/2
-    };
-  }
-
-  if(side === 'back'){
-    return {
-      points:centerPts,
-      position:new THREE.Vector3(0, 0, -eps),
-      rotationY:0
-    };
-  }
-
-  return {
-    points:centerPts,
-    position:new THREE.Vector3(0, 0, eps),
-    rotationY:0
-  };
-}
-
-
 function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
-  // 手扶梯背板圖片面：使用與背板本體相同的 ShapeGeometry。
-  // 正面 = 矩形中板；左/右側 = 斜切五邊形。
-  // 這樣圖片會被背板輪廓裁切，不會再露出矩形四角。
+  // v10.6 重要修正：
+  // 不再另外建立一片新的圖片面，因為新面的位置/旋轉可能和原本 3D 折板不同步。
+  // 改用 buildReal3DEscalatorUnderBackwall() 內 addPanelWithPOP() 建好的原始 POP mesh。
+  // 原始 POP mesh 已經和中央板、左折板、右折板共用正確 ShapeGeometry、位置與角度。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
   if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
 
   obj.mesh.userData.forceImagePlanes = obj.mesh.userData.forceImagePlanes || {};
 
+  // 清掉舊版 v10.4/v10.5 生成的 forceBackwallImage 額外面，避免它蓋在錯誤位置。
   const old = obj.mesh.userData.forceImagePlanes[side];
   if(old && old.parent){
     old.parent.remove(old);
     old.geometry && old.geometry.dispose && old.geometry.dispose();
     old.material && old.material.dispose && old.material.dispose();
   }
+  obj.mesh.userData.forceImagePlanes[side] = null;
 
-  const cfg = getEscalatorBackwallPanelConfig(obj, side);
-  const geo = makeBackwallImageShapeGeometry(cfg.points);
-  const mat = makeAlwaysVisibleImageMaterial(cloneTextureSafe(tex));
+  // 找原始 POP 面：這個才是正確折板位置與斜切形狀。
+  let pop = null;
+  obj.mesh.traverse(c=>{
+    if(pop) return;
+    if(c.isMesh && c.userData && c.userData.isPOP && c.userData.popSide === side && !c.userData.forceBackwallImage){
+      pop = c;
+    }
+  });
 
-  // ShapeGeometry 是單面輪廓，材質只看正面，避免看到背面時肉眼變鏡像。
-  mat.side = THREE.FrontSide;
-  mat.depthTest = false;
-  mat.depthWrite = false;
-  mat.transparent = false;
-  mat.needsUpdate = true;
+  if(!pop){
+    // 保底：使用 userData 直接掛載的面。
+    const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
+    pop = obj.mesh.userData[key] || null;
+  }
 
-  const plane = new THREE.Mesh(geo, mat);
-  plane.position.copy(cfg.position);
-  plane.rotation.y = cfg.rotationY;
-  plane.renderOrder = 100000;
-  plane.frustumCulled = false;
-  plane.visible = true;
+  if(!pop) return null;
 
-  plane.userData.isPOP = true;
-  plane.userData.hasPOP = true;
-  plane.userData.popSide = side;
-  plane.userData.forceBackwallImage = true;
-  plane.userData.shapeMaskedBackwallImage = true;
-  plane.userData.lockVisible = true;
+  if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function'){
+    normalizeGeometryUVToFullBleed(pop.geometry);
+  }
 
-  // 若父層背板被鏡面翻轉，子層圖片面反向抵銷父層鏡射；
-  // 只改顯示面的 scale，不改原圖 UV，不翻轉圖片檔案。
+  pop.material = makeAlwaysVisibleImageMaterial(cloneTextureSafe(tex));
+  pop.material.side = THREE.DoubleSide; // 使用原始 POP 面，允許兩側可見，但不改 UV，不翻轉圖片。
+  pop.material.depthTest = false;
+  pop.material.depthWrite = false;
+  pop.material.transparent = false;
+  pop.material.needsUpdate = true;
+
+  pop.visible = true;
+  pop.frustumCulled = false;
+  pop.renderOrder = 100000;
+  pop.userData.hasPOP = true;
+  pop.userData.isPOP = true;
+  pop.userData.popSide = side;
+  pop.userData.lockVisible = true;
+  pop.userData.shapeMaskedBackwallImage = true;
+  pop.userData.forceBackwallImage = false;
+
+  // 父層若鏡面翻轉，原始 POP 面會一起被翻。
+  // 這裡只對貼圖面做反向抵銷，避免肉眼看到水平鏡射。
   const counterMirrorForParentFlip = !!(obj.item && obj.item.flipX);
-  plane.scale.x = counterMirrorForParentFlip ? -1 : 1;
-  plane.userData.counterMirrorForParentFlip = counterMirrorForParentFlip;
-
-  obj.mesh.add(plane);
-  obj.mesh.userData.forceImagePlanes[side] = plane;
+  pop.scale.x = counterMirrorForParentFlip ? -1 : 1;
+  pop.userData.counterMirrorForParentFlip = counterMirrorForParentFlip;
 
   const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
-  obj.mesh.userData[key] = plane;
-  if(side === 'front') obj.mesh.userData.popMesh = plane;
+  obj.mesh.userData[key] = pop;
+  if(side === 'front') obj.mesh.userData.popMesh = pop;
 
-  return plane;
+  return pop;
 }
 
 function applyTextureToBackwallBody(obj, side, tex){
   // 保留一層真實材質貼圖，但最終顯示以 forceCreateEscalatorBackwallImagePlane 為主。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return;
+  if(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0) return;
 
   const panelNames = {
     front: '中央主背板',
@@ -2880,7 +2814,6 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
   scene.add(newMesh);
   obj.mesh = newMesh;
   reapplyStoredPOPImages(obj);
-  refreshForcedBackwallImageMirrorState(obj);
 }
 
 
@@ -2891,7 +2824,6 @@ function flipSelectedEscalatorBackwall(){
   selectedObj.item.flipX = !selectedObj.item.flipX;
   selectedObj.mesh.scale.x *= -1;
   selectedObj.mesh.updateMatrixWorld(true);
-  refreshForcedBackwallImageMirrorState(selectedObj);
   saveHistory();
   selectObject(selectedObj);
   updateDimensionDisplayIfNeeded();
@@ -2975,12 +2907,11 @@ function reapplyStoredPOPImages(obj){
       if(forcedPlane) pop = forcedPlane;
       if(pop){
         if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(pop.geometry);
-        pop.material = makeAlwaysVisibleImageMaterial(tex);
+        pop.material = makePersistentPOPMaterial(tex);
         pop.userData.hasPOP = true;
         lockPOPImageVisible(pop);
       }
       applyTextureToBackwallBody(obj, side, tex);
-      forceCreateEscalatorBackwallImagePlane(obj, side, tex);
     };
     img.src = dataUrl;
   });
@@ -3037,7 +2968,6 @@ function selectObject(obj){
   reapplyStoredPOPImages(obj);
   buildGizmo(obj);
   refreshAllPOPTextureOrientation(obj);
-  refreshForcedBackwallImageMirrorState(obj);
 }
 
 function deselectAll(){
@@ -4101,7 +4031,6 @@ function refreshDimensionAnnotations(){
   dimensionGroup.userData.isDimensionRoot = true;
   objects.forEach(obj=>{
     if(!obj || !obj.mesh) return;
-    refreshForcedBackwallImageMirrorState(obj);
     const ann = createObjectDimensionAnnotation(obj);
     dimensionGroup.add(ann);
   });
@@ -4137,22 +4066,6 @@ function forceUploadedTextureOriginalDirection(mesh){
   tex.needsUpdate = true;
 }
 
-
-function refreshForcedBackwallImageMirrorState(obj){
-  if(!obj || !obj.mesh || !obj.item) return;
-  const counter = !!obj.item.flipX;
-  obj.mesh.traverse(c=>{
-    if(c.isMesh && c.userData && c.userData.forceBackwallImage){
-      c.scale.x = counter ? -1 : 1;
-      c.userData.counterMirrorForParentFlip = counter;
-      if(c.material){
-        c.material.side = THREE.FrontSide;
-        c.material.needsUpdate = true;
-      }
-    }
-  });
-}
-
 function maintainUploadedPOPVisibility(){
   objects.forEach(obj=>{
     if(!obj || !obj.mesh) return;
@@ -4162,7 +4075,7 @@ function maintainUploadedPOPVisibility(){
         c.frustumCulled = false;
         c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
         if(c.material){
-          if(c.userData.forceBackwallImage) c.material.side = THREE.FrontSide; else c.material.side = THREE.DoubleSide;
+          c.material.side = THREE.DoubleSide;
           c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
           c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
           c.material.needsUpdate = true;
