@@ -1115,7 +1115,7 @@ function makeBlankPOPMaterial(){
     color:0xffffff,
     transparent:true,
     opacity:0,
-    side:THREE.DoubleSide,
+    side:THREE.FrontSide,
     depthTest:false,
     depthWrite:false,
     polygonOffset:true,
@@ -2353,32 +2353,25 @@ function getObjectWorldMirrorX(obj){
 }
 
 function compensatePOPTextureForObjectMirror(tex, obj, popMesh, side){
-  // v10.8.9：圖片永遠不改 UV、不 repeat.x=-1、不 offset.x=1。
-  // 背板可照原本邏輯翻轉；只讓 POP 圖片層做反向補償，並維持可見。
+  // 圖片永遠正面顯示，不做任何鏡像補償
   if(tex){
     tex.wrapS = THREE.ClampToEdgeWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.repeat.set(1, 1);
     tex.offset.set(0, 0);
     tex.rotation = 0;
-    if(tex.center) tex.center.set(0, 0);
+    if(tex.center) tex.center.set(0.5, 0.5);
     tex.needsUpdate = true;
   }
-
   if(popMesh){
-    const isEscBackwall = !!(obj && obj.item && obj.item.shape && obj.item.shape.indexOf('escalator_') === 0);
-    const counterMirror = isEscBackwall && getObjectWorldMirrorX(obj);
-
-    popMesh.scale.x = counterMirror ? -1 : 1;
+    // 永遠不鏡像
+    popMesh.scale.x = 1;
     popMesh.scale.y = 1;
     popMesh.frustumCulled = false;
     popMesh.visible = true;
     popMesh.renderOrder = Math.max(popMesh.renderOrder || 0, 100000);
-    popMesh.userData.counterMirrorForParentFlip = counterMirror;
-    popMesh.userData.imageNeverMirror = true;
-
     if(popMesh.material){
-      popMesh.material.side = THREE.DoubleSide;
+      popMesh.material.side = THREE.FrontSide; // 只顯示正面，不穿透
       popMesh.material.depthTest = false;
       popMesh.material.depthWrite = false;
       popMesh.material.needsUpdate = true;
@@ -2542,12 +2535,12 @@ function makeAlwaysVisibleImageMaterial(tex){
   tex.repeat.set(1, 1);
   tex.offset.set(0, 0);
   tex.rotation = 0;
-  if(tex.center) tex.center.set(0, 0);
+  if(tex.center) tex.center.set(0.5, 0.5);
   tex.needsUpdate = true;
 
   return new THREE.MeshBasicMaterial({
     map: tex,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,  // 只顯示正面，不鏡像穿透
     transparent: false,
     opacity: 1,
     depthTest: false,
@@ -2575,20 +2568,18 @@ function getEscalatorPanelSize(obj, side){
 
 
 function makeEmbeddedBackwallMaterial(tex){
-  // v10.8.9：手扶梯背板圖片直接嵌入實體 panel，本體幾何就是遮罩。
-  // 不建立/不使用外掛 POP 圖片面，所以側面不會漂浮到空氣中。
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.repeat.set(1, 1);
   tex.offset.set(0, 0);
   tex.rotation = 0;
-  if(tex.center) tex.center.set(0, 0);
-  tex.flipY = true;
+  if(tex.center) tex.center.set(0.5, 0.5);
+  tex.flipY = true; // WebGL 需要 flipY 讓圖片上下正確
   tex.needsUpdate = true;
 
   return new THREE.MeshBasicMaterial({
     map: tex,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide, // 只顯示正面
     transparent: false,
     opacity: 1,
     depthTest: true,
@@ -2746,11 +2737,12 @@ function lockPOPImageVisible(popMesh){
   if(!popMesh) return;
   popMesh.visible = true;
   popMesh.frustumCulled = false;
-  popMesh.renderOrder = Math.max(popMesh.renderOrder || 0, popMesh.userData && popMesh.userData.forceBackwallImage ? 100000 : 999);
-  popMesh.userData.backwallContext = popMesh.userData.backwallContext || 'image';
-  popMesh.userData.backwallRole = popMesh.userData.backwallRole || 'image';
+  popMesh.renderOrder = Math.max(popMesh.renderOrder || 0, 100000);
+  // 確保 scale 不翻轉
+  if(popMesh.scale.x < 0) popMesh.scale.x = 1;
+  if(popMesh.scale.y < 0) popMesh.scale.y = 1;
   if(popMesh.material){
-    popMesh.material.side = THREE.DoubleSide;
+    popMesh.material.side = THREE.FrontSide; // 永遠只顯示正面
     popMesh.material.depthTest = false;
     popMesh.material.depthWrite = false;
     popMesh.material.needsUpdate = true;
