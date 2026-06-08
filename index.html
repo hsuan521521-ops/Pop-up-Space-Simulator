@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v9.8</title>
+<title>自製空間模擬系統 Pro v9.9</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -325,6 +325,16 @@
           <button class="action-btn del" onclick="deleteSelected()">✕ 刪除物件</button>
           <div id="pop-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
             <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">輸出物圖片</div>
+            <div id="backwall-direct-upload-panel" style="display:none;background:rgba(122,90,34,.12);border:1px solid rgba(122,90,34,.35);border-radius:7px;padding:8px;margin-bottom:8px;">
+              <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px;">背板圖片直接上傳</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+                <button class="action-btn" onclick="quickUploadPOP('front')" style="margin:0;text-align:center;">正面 / 主面</button>
+                <button class="action-btn" onclick="quickUploadPOP('back')" style="margin:0;text-align:center;">背面</button>
+                <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
+                <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
+              </div>
+              <div style="font-size:10px;color:var(--text3);line-height:1.5;margin-top:6px;">選到背板後直接按這裡上傳；若系統找不到貼圖面，會自動建立。</div>
+            </div>
             <div id="quick-pop-upload-panel" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
               <button class="action-btn" onclick="quickUploadPOP('front')" style="margin:0;text-align:center;">正面</button>
               <button class="action-btn" onclick="quickUploadPOP('back')" style="margin:0;text-align:center;">背面</button>
@@ -2304,6 +2314,9 @@ function findPOPMesh(group){
 }
 
 function findPOPMeshBySide(group, side){
+  const directKey = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
+  if(root && root.userData && root.userData[directKey]) return root.userData[directKey];
+
   // Tables store refs directly on userData
   const direct = group.userData['pop' + side.charAt(0).toUpperCase() + side.slice(1)];
   if(direct) return direct;
@@ -2345,7 +2358,64 @@ function refreshAllPOPTextureOrientation(obj){
 }
 
 
+
+function isBackwallObject(obj){
+  return !!(obj && obj.item && obj.item.cat === 'backwall');
+}
+
+function ensurePOPMeshForSide(obj, side){
+  if(!obj || !obj.mesh) return null;
+
+  let popMesh = findPOPMeshBySide(obj.mesh, side);
+  if(popMesh) return popMesh;
+
+  // 找不到背板貼圖面時，自動補一片透明貼圖面，避免上傳失敗。
+  const box = new THREE.Box3().setFromObject(obj.mesh);
+  if(!isFinite(box.min.x) || !isFinite(box.max.x)) return null;
+
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+
+  const eps = 1.2 * U;
+  let geo, mesh;
+  const mat = makeBlankPOPMaterial ? makeBlankPOPMaterial() : new THREE.MeshBasicMaterial({
+    color:0xffffff, transparent:true, opacity:0, side:THREE.DoubleSide
+  });
+
+  if(side === 'front' || side === 'back'){
+    geo = new THREE.PlaneGeometry(Math.max(size.x, 5*U), Math.max(size.y, 5*U));
+    mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(center.x - obj.mesh.position.x, center.y - obj.mesh.position.y, (side === 'front' ? box.max.z : box.min.z) - obj.mesh.position.z + (side === 'front' ? eps : -eps));
+    mesh.rotation.y = side === 'front' ? 0 : Math.PI;
+  }else{
+    geo = new THREE.PlaneGeometry(Math.max(size.z, 5*U), Math.max(size.y, 5*U));
+    mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((side === 'right' ? box.max.x : box.min.x) - obj.mesh.position.x + (side === 'right' ? eps : -eps), center.y - obj.mesh.position.y, center.z - obj.mesh.position.z);
+    mesh.rotation.y = side === 'right' ? -Math.PI/2 : Math.PI/2;
+  }
+
+  mesh.userData.isPOP = true;
+  mesh.userData.popSide = side;
+  mesh.userData.autoCreatedPOP = true;
+  mesh.renderOrder = 999;
+  mesh.frustumCulled = false;
+  obj.mesh.add(mesh);
+
+  const key = 'pop' + side.charAt(0).toUpperCase() + side.slice(1);
+  obj.mesh.userData[key] = mesh;
+  if(side === 'front') obj.mesh.userData.popMesh = mesh;
+
+  return mesh;
+}
+
+function showBackwallUploadError(message){
+  alert(message || '背板圖片上傳失敗，請先選取背板後再上傳。');
+}
+
 function applyPOPToSide(input, side){
+  if(!selectedObj || !input || !input.files || !input.files[0]){ showBackwallUploadError('請先選取要上傳圖片的背板或物件。'); return; }
   if(!selectedObj || !input.files[0]) return;
   const reader = new FileReader();
   reader.onload = e => {
@@ -2370,7 +2440,8 @@ function applyPOPToSide(input, side){
       tex.magFilter   = THREE.LinearFilter;
       tex.generateMipmaps = false;
       tex.needsUpdate = true;
-      const popMesh = findPOPMeshBySide(selectedObj.mesh, side);
+      const popMesh = ensurePOPMeshForSide(selectedObj, side);
+      if(!popMesh){ showBackwallUploadError('找不到可貼圖面，已嘗試自動建立但失敗。'); return; }
       if(popMesh){
         compensatePOPTextureForObjectMirror(tex, selectedObj, popMesh, side);
         if(popMesh.geometry) normalizeGeometryUVToFullBleed(popMesh.geometry);
@@ -2397,7 +2468,7 @@ function applyPOPImage(input){ applyPOPToSide(input, 'front'); }
 
 function clearPOPSide(side){
   if(!selectedObj) return;
-  const popMesh = findPOPMeshBySide(selectedObj.mesh, side);
+  const popMesh = ensurePOPMeshForSide(selectedObj, side);
   if(popMesh){
     popMesh.material = makeBlankPOPMaterial();
     popMesh.userData.hasPOP = false;
@@ -2635,6 +2706,8 @@ function selectObject(obj){
   document.getElementById('pop-panel').style.display  = hasPOP ? 'block' : 'none';
   document.getElementById('pop-single').style.display = 'none';
   document.getElementById('pop-multi').style.display  = hasPOP ? 'flex' : 'none';
+  const backwallDirectPanel = document.getElementById('backwall-direct-upload-panel');
+  if(backwallDirectPanel) backwallDirectPanel.style.display = isBackwallObject(obj) ? 'block' : 'none';
   const popHint = document.getElementById('pop-side-hint');
   if(popHint) popHint.style.display = (obj.item.shape === 'escalator_wrap_backwall' || (obj.item.shape&&obj.item.shape.indexOf('escalator_under_')===0)) ? 'block' : 'none';
   // reset label highlights for four-face
@@ -2668,6 +2741,8 @@ function deselectAll(){
   if(customImgProps) customImgProps.style.display='none';
   const escProps = document.getElementById('escalator-transform-props');
   if(escProps) escProps.style.display='none';
+  const backwallDirectPanel = document.getElementById('backwall-direct-upload-panel');
+  if(backwallDirectPanel) backwallDirectPanel.style.display='none';
   updateSceneList();
 }
 
@@ -3384,7 +3459,10 @@ function getDirectPOPInput(){
 
 
 function quickUploadPOP(side){
-  if(!selectedObj) return;
+  if(!selectedObj){
+    showBackwallUploadError('請先點選一個背板或物件。');
+    return;
+  }
   const input = getDirectPOPInput();
   input.onchange = () => {
     if(!selectedObj || !input.files[0]) return;
