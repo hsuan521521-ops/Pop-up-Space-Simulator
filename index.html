@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.8.1</title>
+<title>自製空間模擬系統 Pro v10.8.2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -1291,9 +1291,17 @@ function buildReal3DEscalatorUnderBackwall(group, item, color, variant){
   const boardMat = new THREE.MeshLambertMaterial({color:new THREE.Color(color)});
   const edgeMat  = new THREE.MeshLambertMaterial({color:0x222222});
 
-  const isLRight = variant === 'L_RIGHT';
-  const isLLeft  = variant === 'L_LEFT';
-  const isU      = variant === 'U';
+  // v10.8.2：左右/鏡面方向只交換幾何配置，禁止使用 group/mesh scale.x = -1。
+  // 這樣背板方向能改，但上傳圖片不會被水平翻轉，旋轉視角也不會因法線反轉而消失。
+  const mirrorByGeometry = !!item.flipX;
+  const effectiveVariant =
+    mirrorByGeometry && variant === 'L_RIGHT' ? 'L_LEFT' :
+    mirrorByGeometry && variant === 'L_LEFT'  ? 'L_RIGHT' :
+    variant;
+
+  const isLRight = effectiveVariant === 'L_RIGHT';
+  const isLLeft  = effectiveVariant === 'L_LEFT';
+  const isU      = effectiveVariant === 'U';
 
   const centerPts = [
     [-centerW/2, 0],
@@ -2494,7 +2502,7 @@ function getEscalatorPanelSize(obj, side){
 
 
 function makeEmbeddedBackwallMaterial(tex){
-  // v10.8.1 手扶梯背板專用：直接貼到板材本體，圖片永遠維持原始方向。
+  // v10.8.2 手扶梯背板專用：圖片永遠維持原始方向，且旋轉 3D 視角不消失。
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.repeat.set(1, 1);
@@ -2564,11 +2572,12 @@ function getOriginalBackwallPopAndPanel(obj, side){
 
 
 function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
-  // v10.8.1：保留函式名稱作為舊呼叫相容，但實際不再建立任何外掛圖片 Plane。
-  // 圖片只會嵌入手扶梯背板本體 Mesh，並且永遠不做鏡像 / 翻轉 / 負 scale。
+  // v10.8.2：保留函式名稱作為舊呼叫相容，但實際不建立任何外掛圖片 Plane。
+  // 圖片只嵌入手扶梯背板本體 Mesh；不鏡像、不水平翻轉、不因視角旋轉消失。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
   if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
 
+  obj.mesh.scale.set(1, 1, 1);
   removeFloatingBackwallImagePlanes(obj, side);
 
   const {pop, panel} = getOriginalBackwallPopAndPanel(obj, side);
@@ -2578,9 +2587,7 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
     normalizeGeometryUVToFullBleed(panel.geometry);
   }
 
-  panel.scale.x = 1;
-  panel.scale.y = 1;
-  panel.scale.z = 1;
+  panel.scale.set(1, 1, 1);
   panel.material = makeEmbeddedBackwallMaterial(cloneTextureSafe(tex));
   panel.visible = true;
   panel.frustumCulled = false;
@@ -2596,10 +2603,9 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
   panel.userData.lockVisible = true;
   panel.userData.counterMirrorForParentFlip = false;
 
-  // 原透明 POP 面只當狀態代理，不顯示，避免任何圖片浮在外面。
   if(pop && pop !== panel){
     pop.visible = false;
-    pop.scale.x = 1;
+    pop.scale.set(1, 1, 1);
     pop.userData.hasPOP = true;
     pop.userData.proxyEmbeddedPanel = panel;
     pop.userData.shapeMaskedBackwallImage = true;
@@ -2681,7 +2687,7 @@ function applyPOPToSide(input, side){
       if(tex.center) tex.center.set(0,0);
       tex.needsUpdate = true;
 
-      // v10.8.1：手扶梯背板直接嵌入本體 Mesh；一般物件才使用 POP 面。
+      // v10.8.2：手扶梯背板直接嵌入本體 Mesh；一般物件才使用 POP 面。
       const isEscBackwall = selectedObj.item && selectedObj.item.shape && selectedObj.item.shape.indexOf('escalator_') === 0;
       let popMesh = isEscBackwall ? null : ensurePOPMeshForSide(selectedObj, side);
 
@@ -2873,9 +2879,9 @@ function rebuildSelectedObjectMeshKeepTransform(obj){
   newMesh.position.copy(oldPos);
   newMesh.rotation.copy(oldRot);
 
-  // v10.8.1：恢復原本左右對調的模型翻轉行為。
-  // 注意：圖片 UV 仍由 compensatePOPTextureForObjectMirror / makeEmbeddedBackwallMaterial 鎖定原始方向。
-  if(obj.item && obj.item.flipX) newMesh.scale.x *= -1;
+  // v10.8.2：不可再用 scale.x = -1 做左右對調。
+  // item.flipX 只交給 buildReal3DEscalatorUnderBackwall() 交換幾何配置。
+  newMesh.scale.set(1, 1, 1);
 
   newMesh.userData = {
     objId: obj.id,
@@ -2897,10 +2903,15 @@ function refreshSelectedPOPTextureOrientation(){ refreshAllPOPTextureOrientation
 
 function flipSelectedEscalatorBackwall(){
   if(!selectedObj || !isEscalatorBackwallItem(selectedObj.item)) return;
+
+  // v10.8.2：保留原本「鏡面翻轉」的狀態邏輯，但不再縮放整個 Mesh。
+  // 圖片不會反字；方向改變由重建幾何處理。
   selectedObj.item.flipX = !selectedObj.item.flipX;
-  selectedObj.mesh.scale.x *= -1;
+  rebuildSelectedObjectMeshKeepTransform(selectedObj);
+  selectedObj.mesh.scale.set(1, 1, 1);
   selectedObj.mesh.updateMatrixWorld(true);
   refreshAllPOPTextureOrientation(selectedObj);
+
   saveHistory();
   selectObject(selectedObj);
   updateDimensionDisplayIfNeeded();
@@ -2910,9 +2921,9 @@ function swapSelectedEscalatorBackwallSide(){
   if(!selectedObj || !isEscalatorBackwallItem(selectedObj.item)) return;
   const shape = selectedObj.item.shape || '';
 
-  // v10.8.1：左右對調邏輯恢復成原本版本。
+  // v10.8.2：保留原本左右對調邏輯。
   // L 型：左折 / 右折直接對調模板。
-  // ㄣ型或舊版包覆背板：維持原本 flipX 狀態切換邏輯。
+  // ㄣ型或舊版包覆背板：維持 flipX 狀態切換，但不使用 scale.x = -1。
   if(shape.includes('_left')){
     selectedObj.item.shape = shape.replace('_left', '_right');
     selectedObj.item.name = selectedObj.item.name.replace(' 左', ' 右').replace('（左）','（右）');
@@ -2924,6 +2935,9 @@ function swapSelectedEscalatorBackwallSide(){
   }
 
   rebuildSelectedObjectMeshKeepTransform(selectedObj);
+  selectedObj.mesh.scale.set(1, 1, 1);
+  refreshAllPOPTextureOrientation(selectedObj);
+
   saveHistory();
   selectObject(selectedObj);
   updateSceneList();
@@ -4158,9 +4172,17 @@ function refreshForcedBackwallImageMirrorState(obj){
     if(!c.isMesh || !c.userData) return;
 
     if(c.userData.embeddedBackwallTexture || c.userData.forceBackwallImage || c.userData.shapeMaskedBackwallImage){
-      // 不改 texture UV，不改 repeat/offset；只確保材質保持可見。
+      c.scale.x = 1;
+      c.frustumCulled = false;
+      c.userData.counterMirrorForParentFlip = false;
       if(c.material){
         c.material.side = THREE.DoubleSide;
+        if(c.userData.embeddedBackwallTexture){
+          c.material.depthTest = true;
+          c.material.depthWrite = true;
+          c.material.transparent = false;
+          c.material.opacity = 1;
+        }
         c.material.needsUpdate = true;
       }
     }
@@ -4173,25 +4195,28 @@ function maintainUploadedPOPVisibility(){
       if(c.isMesh && c.userData && (c.userData.embeddedBackwallTexture || c.userData.forceBackwallImage || (c.userData.isPOP && c.userData.hasPOP))){
         if(c.userData.proxyEmbeddedPanel){
           c.visible = false;
+          c.scale.x = 1;
           return;
         }
 
         c.visible = true;
         c.frustumCulled = false;
+
         if(c.userData.embeddedBackwallTexture){
+          c.scale.x = 1;
           c.renderOrder = 80;
           if(c.material){
             c.material.side = THREE.DoubleSide;
             c.material.depthTest = true;
             c.material.depthWrite = true;
+            c.material.transparent = false;
+            c.material.opacity = 1;
             c.material.needsUpdate = true;
           }
         }else{
           c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
           if(c.material){
             c.material.side = THREE.DoubleSide;
-            c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
-            c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
             c.material.needsUpdate = true;
           }
         }
