@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.4</title>
+<title>自製空間模擬系統 Pro v10.5</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -341,7 +341,7 @@
               <button class="action-btn" onclick="quickUploadPOP('left')" style="margin:0;text-align:center;">左側</button>
               <button class="action-btn" onclick="quickUploadPOP('right')" style="margin:0;text-align:center;">右側</button>
             </div>
-            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，不做鏡像、左右翻轉或旋轉。</div>
+            <div id="pop-side-hint" style="display:none;font-size:10px;color:var(--accent);line-height:1.5;margin:-2px 0 8px;">手扶梯下背板：L型只有兩面；ㄣ型有三面。可翻轉/對調背板，但上傳圖片永遠保持原始方向，並依背板斜切外型裁切，不會露出矩形四角。</div>
             <!-- 冰箱：單面 -->
             <div id="pop-single" style="display:none;">
               <label style="display:block;background:var(--panel2);border:1px dashed var(--accent);border-radius:6px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:var(--accent);">
@@ -2476,16 +2476,95 @@ function getEscalatorPanelSize(obj, side){
   };
 }
 
+
+function makeShapeFromPoints(points){
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for(let i=1; i<points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+  shape.closePath();
+  return shape;
+}
+
+function makeBackwallImageShapeGeometry(points){
+  // 圖片面使用與手扶梯背板相同的斜切輪廓，不再使用矩形 PlaneGeometry。
+  const geo = new THREE.ShapeGeometry(makeShapeFromPoints(points));
+  if(typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(geo);
+  return geo;
+}
+
+function getEscalatorBackwallPanelConfig(obj, side){
+  const item = obj?.item || {};
+  const centerW = (item.centerW || item.w || 176) * U;
+  const sideW   = (item.sideW || item.d || 199) * U;
+  const H       = (item.h || 223) * U;
+  const lowH    = (item.lowH || 116) * U;
+  const topFlat = (item.topFlat || 22) * U;
+  const eps     = 6 * U;
+
+  const centerPts = [
+    [-centerW/2, 0],
+    [ centerW/2, 0],
+    [ centerW/2, H],
+    [-centerW/2, H]
+  ];
+
+  const leftPts = [
+    [0, 0],
+    [sideW, 0],
+    [sideW, H],
+    [sideW - topFlat, H],
+    [0, lowH]
+  ];
+
+  const rightPts = [
+    [0, 0],
+    [sideW, 0],
+    [sideW, lowH],
+    [topFlat, H],
+    [0, H]
+  ];
+
+  if(side === 'left'){
+    return {
+      points:leftPts,
+      position:new THREE.Vector3(-centerW/2 - eps, 0, 0),
+      rotationY:-Math.PI/2
+    };
+  }
+
+  if(side === 'right'){
+    return {
+      points:rightPts,
+      position:new THREE.Vector3(centerW/2 + eps, 0, 0),
+      rotationY:Math.PI/2
+    };
+  }
+
+  if(side === 'back'){
+    return {
+      points:centerPts,
+      position:new THREE.Vector3(0, 0, -eps),
+      rotationY:0
+    };
+  }
+
+  return {
+    points:centerPts,
+    position:new THREE.Vector3(0, 0, eps),
+    rotationY:0
+  };
+}
+
+
 function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
-  // 手扶梯背板最終保底方案：
-  // 不依賴原始不規則板材 UV，也不依賴 raycast 點到哪一片。
-  // 直接在背板表面前方新增一片滿版圖片面。
+  // 手扶梯背板圖片面：使用與背板本體相同的 ShapeGeometry。
+  // 正面 = 矩形中板；左/右側 = 斜切五邊形。
+  // 這樣圖片會被背板輪廓裁切，不會再露出矩形四角。
   if(!obj || !obj.mesh || !obj.item || obj.item.cat !== 'backwall') return null;
   if(!(obj.item.shape && obj.item.shape.indexOf('escalator_') === 0)) return null;
 
   obj.mesh.userData.forceImagePlanes = obj.mesh.userData.forceImagePlanes || {};
 
-  // 移除同面舊圖
   const old = obj.mesh.userData.forceImagePlanes[side];
   if(old && old.parent){
     old.parent.remove(old);
@@ -2493,45 +2572,37 @@ function forceCreateEscalatorBackwallImagePlane(obj, side, tex){
     old.material && old.material.dispose && old.material.dispose();
   }
 
-  const item = obj.item;
-  const centerW = (item.centerW || item.w || 176) * U;
-  const sideW = (item.sideW || item.d || 199) * U;
-  const H = (item.h || 223) * U;
-  const eps = 6 * U;
-
-  const size = getEscalatorPanelSize(obj, side);
-  const geo = new THREE.PlaneGeometry(size.w, size.h);
+  const cfg = getEscalatorBackwallPanelConfig(obj, side);
+  const geo = makeBackwallImageShapeGeometry(cfg.points);
   const mat = makeAlwaysVisibleImageMaterial(cloneTextureSafe(tex));
+
+  // ShapeGeometry 是單面輪廓，材質只看正面，避免看到背面時肉眼變鏡像。
+  mat.side = THREE.FrontSide;
+  mat.depthTest = false;
+  mat.depthWrite = false;
+  mat.transparent = false;
+  mat.needsUpdate = true;
+
   const plane = new THREE.Mesh(geo, mat);
+  plane.position.copy(cfg.position);
+  plane.rotation.y = cfg.rotationY;
+  plane.renderOrder = 100000;
+  plane.frustumCulled = false;
+  plane.visible = true;
 
   plane.userData.isPOP = true;
   plane.userData.hasPOP = true;
   plane.userData.popSide = side;
   plane.userData.forceBackwallImage = true;
+  plane.userData.shapeMaskedBackwallImage = true;
   plane.userData.lockVisible = true;
-  plane.renderOrder = 100000;
-  plane.frustumCulled = false;
-  plane.visible = true;
 
-  if(side === 'front'){
-    plane.position.set(0, H/2, eps);
-    plane.rotation.y = 0;
-  }else if(side === 'back'){
-    plane.position.set(0, H/2, -eps);
-    plane.rotation.y = 0;
-  }else if(side === 'left'){
-    plane.position.set(-centerW/2 - eps, H/2, -sideW/2);
-    plane.rotation.y = -Math.PI / 2;
-  }else if(side === 'right'){
-    plane.position.set(centerW/2 + eps, H/2, -sideW/2);
-    plane.rotation.y = Math.PI / 2;
-  }
-
-  // 父層背板若已鏡面翻轉 scale.x = -1，子層圖片也會被肉眼看到水平翻轉。
-  // 這裡用子層 scale.x = -1 抵銷父層鏡射，只影響圖片面，不改原圖 UV。
+  // 若父層背板被鏡面翻轉，子層圖片面反向抵銷父層鏡射；
+  // 只改顯示面的 scale，不改原圖 UV，不翻轉圖片檔案。
   const counterMirrorForParentFlip = !!(obj.item && obj.item.flipX);
   plane.scale.x = counterMirrorForParentFlip ? -1 : 1;
   plane.userData.counterMirrorForParentFlip = counterMirrorForParentFlip;
+
   obj.mesh.add(plane);
   obj.mesh.userData.forceImagePlanes[side] = plane;
 
@@ -2904,7 +2975,7 @@ function reapplyStoredPOPImages(obj){
       if(forcedPlane) pop = forcedPlane;
       if(pop){
         if(pop.geometry && typeof normalizeGeometryUVToFullBleed === 'function') normalizeGeometryUVToFullBleed(pop.geometry);
-        pop.material = makePersistentPOPMaterial(tex);
+        pop.material = makeAlwaysVisibleImageMaterial(tex);
         pop.userData.hasPOP = true;
         lockPOPImageVisible(pop);
       }
@@ -4091,7 +4162,7 @@ function maintainUploadedPOPVisibility(){
         c.frustumCulled = false;
         c.renderOrder = c.userData.forceBackwallImage ? 100000 : Math.max(c.renderOrder || 0, 999);
         if(c.material){
-          c.material.side = THREE.DoubleSide;
+          if(c.userData.forceBackwallImage) c.material.side = THREE.FrontSide; else c.material.side = THREE.DoubleSide;
           c.material.depthTest = c.userData.forceBackwallImage ? false : c.material.depthTest;
           c.material.depthWrite = c.userData.forceBackwallImage ? false : c.material.depthWrite;
           c.material.needsUpdate = true;
