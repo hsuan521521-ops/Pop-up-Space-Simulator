@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>自製空間模擬系統 Pro v10.9.1</title>
+<title>自製空間模擬系統 Pro v10.9.2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:wght@400;600&display=swap');
 
@@ -170,7 +170,7 @@
   <button class="tb-btn" onclick="applyBoothInputSize()" style="padding:4px 10px;">套用</button>
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="showSpaceImport()" style="border-color:#7eb87a;color:#7eb87a;">🏠 匯入空間</button>
-  <button class="tb-btn" id="btn-bg-toggle" onclick="toggleSpaceBg()" style="display:none;">👁 隱藏背景</button>
+  <button class="tb-btn" id="btn-bg-toggle" onclick="toggleSpaceBg()">👁 隱藏背景</button>
   <button class="tb-btn" id="btn-bg-mode" onclick="toggleBgMode()" style="display:none;">🔄 2D底圖</button>
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="exportImage()">📷 截圖</button>
@@ -1005,6 +1005,7 @@ function init(){
   buildUI();
   setupEvents(canvas, wrap);
   animate();
+  updateSpaceBgToggleButton();
   window.addEventListener('resize', onResize);
 }
 
@@ -1376,6 +1377,34 @@ function buildReal3DEscalatorUnderBackwall(group, item, color, variant){
   };
 }
 
+
+
+function stabilize3DObjectVisibility(root){
+  // v10.9.2：避免設備在 3D 瀏覽、旋轉視角、拉近拉遠時被 Three.js 誤判消失。
+  // 只處理可見性與 bounding，不改動任何位置、尺寸、旋轉、貼圖或資料。
+  if(!root) return root;
+  root.frustumCulled = false;
+  root.traverse(c=>{
+    c.frustumCulled = false;
+    if(c.isMesh){
+      c.visible = c.visible !== false;
+      if(c.geometry){
+        try{
+          c.geometry.computeBoundingBox && c.geometry.computeBoundingBox();
+          c.geometry.computeBoundingSphere && c.geometry.computeBoundingSphere();
+        }catch(err){}
+      }
+      if(c.material){
+        const mats = Array.isArray(c.material) ? c.material : [c.material];
+        mats.forEach(m=>{
+          if(!m) return;
+          m.needsUpdate = true;
+        });
+      }
+    }
+  });
+  return root;
+}
 
 function buildMesh(item, color){
   if(item.shape === 'custom_image_plane') return buildCustomImageObjectMesh(item);
@@ -2078,6 +2107,7 @@ function buildMesh(item, color){
 
   ensureFourSidePOP(group, item, w, d, h);
   group.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; } });
+  stabilize3DObjectVisibility(group);
   return group;
 }
 
@@ -2297,6 +2327,7 @@ function finalizePlacing(pos){
     popMesh:  placingMesh.userData.popFront,
   };
   placingMesh.position.set(pos.x, 0, pos.z);
+  stabilize3DObjectVisibility(placingMesh);
   objects.push(obj);
   placingMesh = null;
   placingItem = null;
@@ -4075,6 +4106,7 @@ function restoreHistory(state){
     mesh.position.set(s.x,0,s.z);
     mesh.rotation.y=s.rot;
     mesh.userData={objId:s.id};
+    stabilize3DObjectVisibility(mesh);
     scene.add(mesh);
     objects.push({id:s.id,item,mesh,color:s.color,x:s.x,z:s.z,rot:s.rot});
   });
@@ -4418,6 +4450,7 @@ function maintainUploadedPOPVisibility(){
 function animate(){
   requestAnimationFrame(animate);
   maintainUploadedPOPVisibility();
+  objects.forEach(o=>{ if(o && o.mesh) stabilize3DObjectVisibility(o.mesh); });
   renderer.render(scene,camera);
 }
 
@@ -4608,7 +4641,7 @@ function applyNotionBooth(){
     applyVirtualSpaceOffset();
   }
 
-  document.getElementById('btn-bg-toggle').style.display = '';
+  updateSpaceBgToggleButton();
   document.getElementById('btn-bg-mode').style.display = '';
   spaceBgMode = '2d';
   spaceBgVisible = true;
@@ -5017,7 +5050,7 @@ function applySpaceImport(){
       applySpaceTo3D(img, h);
     }
     forceShowSpacePhoto(spacePhotoDataUrl);
-    document.getElementById('btn-bg-toggle').style.display='';
+    updateSpaceBgToggleButton();
     document.getElementById('btn-bg-mode').style.display='';
     updateBgModeBtn();
     showVirtualMovePanel();
@@ -5048,6 +5081,14 @@ function applySpaceTo2D(){
   spaceBgVisible = true;
 }
 
+
+function updateSpaceBgToggleButton(){
+  const btn = document.getElementById('btn-bg-toggle');
+  if(!btn) return;
+  btn.style.display = '';
+  btn.textContent = spaceBgVisible ? '👁 隱藏背景' : '👁 顯示背景';
+}
+
 function toggleSpaceBg(){
   spaceBgVisible = !spaceBgVisible;
   const bg = getBgLayer();
@@ -5064,7 +5105,7 @@ function toggleSpaceBg(){
       renderer.setClearColor(0x000000, 0);
     }
     showVirtualMovePanel();
-    document.getElementById('btn-bg-toggle').textContent = '👁 隱藏背景';
+    updateSpaceBgToggleButton();
   }else{
     if(bg) bg.style.display = 'none';
     if(img) img.style.display = 'none';
@@ -5094,7 +5135,7 @@ function toggleSpaceBg(){
     if(labelMesh) labelMesh.visible = true;
 
     hideVirtualMovePanel();
-    document.getElementById('btn-bg-toggle').textContent = '👁 顯示背景';
+    updateSpaceBgToggleButton();
   }
 }
 
