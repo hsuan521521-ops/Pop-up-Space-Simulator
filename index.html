@@ -526,6 +526,10 @@
           <div style="font-size:11px;color:var(--text3);margin-bottom:8px;padding:8px;background:var(--panel2);border-radius:6px;line-height:1.6;">
             <span id="space-ai-desc"></span>
           </div>
+          <div id="space-features-wrap" style="display:none;font-size:11px;color:var(--text2);margin-bottom:10px;padding:8px;background:rgba(126,184,122,.08);border:1px solid rgba(126,184,122,.25);border-radius:6px;line-height:1.7;">
+            <div style="color:var(--green);font-weight:600;margin-bottom:3px;">自動格局判讀</div>
+            <div id="space-features"></div>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
             <div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">空間寬度 cm</div>
@@ -724,6 +728,18 @@ let placingMesh = null;
 let boothW = 300, boothD = 300;
 let floorMesh, wallBack, wallLeft, wallRight;
 let floorColor = '#d4c5b0', wallColor = '#f5f0e8';
+let roomH = 280;
+let spaceAIData = null;
+let spaceLayout = {
+  horizon: 0.38,
+  leftWall: true,
+  rightWall: true,
+  backWall: true,
+  floorColor: '#d4c5b0',
+  wallColor: '#f5f0e8',
+  floorTextureDataUrl: null,
+  wallTextureDataUrl: null
+};
 let boothName = '望思甜點';
 let history = [], historyIdx = -1;
 let isDragging = false, lastMouse = {x:0,y:0};
@@ -800,7 +816,7 @@ function buildBooth(){
   if(wallRight) scene.remove(wallRight);
   if(gridHelper) scene.remove(gridHelper);
 
-  const fw = boothW*U, fd = boothD*U, fh = 50*U;
+  const fw = boothW*U, fd = boothD*U, fh = Math.max(120, roomH || 280)*U;
   const wallT = 2*U;
 
   // Floor
@@ -810,6 +826,19 @@ function buildBooth(){
   floorMesh.receiveShadow = true;
   floorMesh.userData.isFloor = true;
   scene.add(floorMesh);
+  if(spaceLayout.floorTextureDataUrl){
+    const floorImg = new Image();
+    floorImg.onload = () => {
+      const tex = new THREE.Texture(floorImg);
+      tex.needsUpdate = true;
+      tex.encoding = THREE.sRGBEncoding;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(Math.max(1, boothW/250), Math.max(1, boothD/250));
+      floorMesh.material = new THREE.MeshLambertMaterial({map: tex, color: new THREE.Color(floorColor)});
+    };
+    floorImg.src = spaceLayout.floorTextureDataUrl;
+  }
 
   // Grid
   gridHelper = new THREE.GridHelper(Math.max(fw,fd), Math.max(boothW,boothD)/50, 0x555555, 0x333333);
@@ -825,17 +854,29 @@ function buildBooth(){
   wallBack.receiveShadow = true;
   wallBack.castShadow = true;
   scene.add(wallBack);
+  if(spaceLayout.wallTextureDataUrl){
+    const wallImg = new Image();
+    wallImg.onload = () => {
+      const tex = new THREE.Texture(wallImg);
+      tex.needsUpdate = true;
+      tex.encoding = THREE.sRGBEncoding;
+      wallBack.material = new THREE.MeshLambertMaterial({map: tex});
+    };
+    wallImg.src = spaceLayout.wallTextureDataUrl;
+  }
 
   // Left wall
   const lwGeo = new THREE.BoxGeometry(wallT, fh, fd);
   wallLeft = new THREE.Mesh(lwGeo, wallMat);
   wallLeft.position.set(-fw/2, fh/2, 0);
   wallLeft.receiveShadow = true;
+  wallLeft.visible = spaceLayout.leftWall !== false;
   scene.add(wallLeft);
 
   // Right wall
   wallRight = wallLeft.clone();
   wallRight.position.set(fw/2, fh/2, 0);
+  wallRight.visible = spaceLayout.rightWall !== false;
   scene.add(wallRight);
 
   // Booth sign on back wall
@@ -2700,7 +2741,7 @@ function clearScene(){
 // ===================== SAVE/LOAD =====================
 function saveScene(){
   const state={
-    boothW, boothD, floorColor, wallColor, boothName,
+    boothW, boothD, roomH, floorColor, wallColor, boothName, spaceLayout, spacePhotoDataUrl, spaceBgMode,
     objects: objects.map(serializeObject)
   };
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
@@ -2722,9 +2763,24 @@ function loadScene(){
       try{
         const state=JSON.parse(ev.target.result);
         boothW=state.boothW||300; boothD=state.boothD||300;
+        roomH=state.roomH||280;
         floorColor=state.floorColor||'#d4c5b0'; wallColor=state.wallColor||'#f5f0e8';
         boothName=state.boothName||'望思甜點';
+        if(state.spaceLayout) spaceLayout = {...spaceLayout, ...state.spaceLayout};
+        if(state.spacePhotoDataUrl) spacePhotoDataUrl = state.spacePhotoDataUrl;
+        if(state.spaceBgMode) spaceBgMode = state.spaceBgMode;
         buildBooth();
+        if(spacePhotoDataUrl){
+          const img = new Image();
+          img.onload = () => {
+            if(spaceBgMode === '2d') applySpaceTo2D();
+            else applySpaceTo3D(img, roomH);
+          };
+          img.src = spacePhotoDataUrl;
+          document.getElementById('btn-bg-toggle').style.display='';
+          document.getElementById('btn-bg-mode').style.display='';
+          updateBgModeBtn();
+        }
         restoreHistory(state.objects||[]);
         saveHistory();
       }catch(err){ alert('讀取失敗：'+err.message); }
@@ -3273,6 +3329,105 @@ function safeSetHTML(id, html){
   if(el) el.innerHTML = html;
 }
 
+function rgbToHex(r,g,b){
+  return '#' + [r,g,b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2,'0')).join('');
+}
+
+function sampleAverageColor(ctx, x0, y0, w, h){
+  const img = ctx.getImageData(x0, y0, Math.max(1,w), Math.max(1,h)).data;
+  let r=0,g=0,b=0,count=0;
+  for(let i=0;i<img.length;i+=16){
+    r += img[i]; g += img[i+1]; b += img[i+2]; count++;
+  }
+  return rgbToHex(r/count, g/count, b/count);
+}
+
+function cropImageDataUrl(sourceImg, sx, sy, sw, sh, outW=900, outH=500){
+  const cvs = document.createElement('canvas');
+  cvs.width = outW; cvs.height = outH;
+  const ctx = cvs.getContext('2d');
+  ctx.drawImage(sourceImg, sx, sy, sw, sh, 0, 0, outW, outH);
+  return cvs.toDataURL('image/jpeg', 0.86);
+}
+
+function analyzeSpaceLayoutFromImage(img){
+  const W = 180, H = 120;
+  const cvs = document.createElement('canvas');
+  cvs.width = W; cvs.height = H;
+  const ctx = cvs.getContext('2d');
+  ctx.drawImage(img, 0, 0, W, H);
+  const data = ctx.getImageData(0, 0, W, H).data;
+
+  const lum = (x,y) => {
+    const i = (y*W+x)*4;
+    return data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+  };
+
+  let bestY = Math.round(H*0.42), bestScore = -1;
+  for(let y=Math.round(H*0.22); y<Math.round(H*0.72); y++){
+    let score = 0;
+    for(let x=8; x<W-8; x++){
+      score += Math.abs(lum(x,y) - lum(x,y-1));
+    }
+    if(score > bestScore){ bestScore = score; bestY = y; }
+  }
+
+  const horizon = Math.max(0.24, Math.min(0.68, bestY / H));
+  const ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
+  let estimatedW = 360, estimatedD = 300;
+  if(ratio >= 1.7){ estimatedW = 600; estimatedD = 320; }
+  else if(ratio >= 1.3){ estimatedW = 480; estimatedD = 320; }
+  else if(ratio <= 0.85){ estimatedW = 320; estimatedD = 480; }
+
+  const depthBoost = horizon < 0.35 ? 1.25 : horizon > 0.52 ? 0.88 : 1;
+  estimatedD = Math.round(estimatedD * depthBoost / 10) * 10;
+
+  const wallColorGuess = sampleAverageColor(ctx, Math.round(W*0.18), Math.round(H*0.08), Math.round(W*0.64), Math.max(8, Math.round(bestY-H*0.08)));
+  const floorColorGuess = sampleAverageColor(ctx, Math.round(W*0.2), Math.round(Math.max(bestY+4,H*0.58)), Math.round(W*0.6), Math.round(H*0.28));
+
+  let leftEdge = 0, rightEdge = 0;
+  for(let y=Math.round(H*0.25); y<Math.round(H*0.85); y++){
+    leftEdge += Math.abs(lum(Math.round(W*0.18), y) - lum(Math.round(W*0.08), y));
+    rightEdge += Math.abs(lum(Math.round(W*0.82), y) - lum(Math.round(W*0.92), y));
+  }
+  const leftWall = leftEdge > 950 || horizon < 0.5;
+  const rightWall = rightEdge > 950 || horizon < 0.5;
+
+  const wallCropH = Math.max(40, Math.round(img.naturalHeight * horizon));
+  const floorCropY = Math.max(0, Math.round(img.naturalHeight * horizon) - 8);
+  const floorCropH = img.naturalHeight - floorCropY;
+
+  return {
+    booth_w: estimatedW,
+    booth_d: estimatedD,
+    room_h: horizon < 0.35 ? 320 : 280,
+    floor_color: floorColorGuess,
+    wall_color: wallColorGuess,
+    horizon,
+    left_wall: leftWall ? 'detected' : 'open',
+    right_wall: rightWall ? 'detected' : 'open',
+    floor_pattern: bestScore > 1800 ? 'visible lines / texture' : 'plain',
+    desc: '已從照片自動建立可編輯空間格局',
+    features: [
+      `牆/地板分界約在照片高度 ${Math.round(horizon*100)}%`,
+      `估算空間 ${estimatedW} × ${estimatedD} cm，高度 ${horizon < 0.35 ? 320 : 280} cm`,
+      leftWall ? '左側判讀為牆面或邊界' : '左側判讀為開放邊',
+      rightWall ? '右側判讀為牆面或邊界' : '右側判讀為開放邊',
+      '已擷取牆面與地板材質，套用到 3D 空間'
+    ],
+    layout: {
+      horizon,
+      leftWall,
+      rightWall,
+      backWall: true,
+      floorColor: floorColorGuess,
+      wallColor: wallColorGuess,
+      wallTextureDataUrl: cropImageDataUrl(img, 0, 0, img.naturalWidth, wallCropH),
+      floorTextureDataUrl: cropImageDataUrl(img, 0, floorCropY, img.naturalWidth, floorCropH)
+    }
+  };
+}
+
 async function analyzeSpaceWithAI(dataUrl){
   // GitHub Pages 是純前端靜態網站，不能直接呼叫 Anthropic / Claude API。
   // 原本直接 fetch('https://api.anthropic.com/v1/messages') 會被瀏覽器 CORS 擋掉，
@@ -3284,53 +3439,14 @@ async function analyzeSpaceWithAI(dataUrl){
   try {
     const img = new Image();
     img.onload = () => {
-      const ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
+      spaceAIData = analyzeSpaceLayoutFromImage(img);
+      spaceLayout = {...spaceLayout, ...spaceAIData.layout};
 
-      let estimatedW = 300;
-      let estimatedD = 300;
-      let estimatedH = 280;
-
-      // 用照片比例做保守估算，避免沒有 AI 時完全卡住
-      if(ratio >= 1.6){
-        estimatedW = 600;
-        estimatedD = 300;
-      } else if(ratio >= 1.25){
-        estimatedW = 450;
-        estimatedD = 300;
-      } else if(ratio <= 0.85){
-        estimatedW = 300;
-        estimatedD = 450;
-      }
-
-      spaceAIData = {
-        booth_w: estimatedW,
-        booth_d: estimatedD,
-        room_h: estimatedH,
-        floor_color: "#f0ece8",
-        wall_color: "#e8e4de",
-        has_escalator: false,
-        has_slanted_ceiling: false,
-        has_arch_door: false,
-        has_digital_screen: false,
-        has_pillar: false,
-        left_wall: "open",
-        right_wall: "open",
-        floor_pattern: "plain",
-        diamond_tile: false,
-        lighting: "mixed",
-        desc: "已匯入現場照片",
-        features: [
-          "照片已成功套用為背景",
-          "已使用本機估算尺寸",
-          "可手動調整寬度、深度與高度"
-        ]
-      };
-
-      safeSetValue('space-w', estimatedW);
-      safeSetValue('space-d', estimatedD);
-      safeSetValue('space-h', estimatedH);
+      safeSetValue('space-w', spaceAIData.booth_w);
+      safeSetValue('space-d', spaceAIData.booth_d);
+      safeSetValue('space-h', spaceAIData.room_h);
       safeSetText('space-ai-desc',
-        "照片已匯入。GitHub Pages 無法直接執行雲端 AI 分析，已先用本機模式估算尺寸，可手動修改後套用。");
+        "照片已匯入並完成本機格局判讀。尺寸可手動微調，套用後就能直接拖放道具編輯。");
 
       safeSetDisplay('space-features-wrap', 'block');
       safeSetHTML('space-features',
@@ -3372,6 +3488,17 @@ function applySpaceImport(){
 
   // Update booth size
   boothW = Math.min(w, 2000); boothD = Math.min(d, 2000);
+  roomH = Math.min(Math.max(h, 120), 2000);
+  if(spaceAIData?.layout){
+    spaceLayout = {
+      ...spaceLayout,
+      ...spaceAIData.layout,
+      floorColor: spaceAIData.floor_color || spaceLayout.floorColor,
+      wallColor: spaceAIData.wall_color || spaceLayout.wallColor
+    };
+    floorColor = spaceLayout.floorColor;
+    wallColor = spaceLayout.wallColor;
+  }
   document.getElementById('booth-w-input').value = boothW;
   document.getElementById('booth-d-input').value = boothD;
 
@@ -3379,12 +3506,12 @@ function applySpaceImport(){
   const img = new Image();
   img.onload = ()=>{
     spaceBg2dImg = img;
+    buildBooth();
     if(spaceBgMode === '3d'){
       applySpaceTo3D(img, h);
     } else {
       applySpaceTo2D();
     }
-    buildBooth();
     resetView();
     // Show toggle buttons
     document.getElementById('btn-bg-toggle').style.display='';
@@ -3396,19 +3523,41 @@ function applySpaceImport(){
 }
 
 function applySpaceTo3D(img, ceilH){
-  // Create texture from photo
-  const tex = new THREE.Texture(img);
-  tex.needsUpdate = true;
-  tex.encoding = THREE.sRGBEncoding;
-  spaceWallTex = tex;
-  // Apply to walls
-  const wallMat = new THREE.MeshLambertMaterial({map: tex});
-  if(wallBack)  wallBack.material  = wallMat;
+  if(spaceLayout.wallTextureDataUrl){
+    const wallImg = new Image();
+    wallImg.onload = () => {
+      const tex = new THREE.Texture(wallImg);
+      tex.needsUpdate = true;
+      tex.encoding = THREE.sRGBEncoding;
+      spaceWallTex = tex;
+      if(wallBack) wallBack.material = new THREE.MeshLambertMaterial({map: tex});
+    };
+    wallImg.src = spaceLayout.wallTextureDataUrl;
+  } else {
+    const tex = new THREE.Texture(img);
+    tex.needsUpdate = true;
+    tex.encoding = THREE.sRGBEncoding;
+    spaceWallTex = tex;
+    if(wallBack) wallBack.material = new THREE.MeshLambertMaterial({map: tex});
+  }
   if(wallLeft)  wallLeft.material  = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
   if(wallRight) wallRight.material = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
-  // Floor keeps color
-  // Update wall height to match room
+  if(floorMesh && spaceLayout.floorTextureDataUrl){
+    const floorImg = new Image();
+    floorImg.onload = () => {
+      const tex = new THREE.Texture(floorImg);
+      tex.needsUpdate = true;
+      tex.encoding = THREE.sRGBEncoding;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(Math.max(1, boothW/250), Math.max(1, boothD/250));
+      floorMesh.material = new THREE.MeshLambertMaterial({map: tex, color: new THREE.Color(floorColor)});
+    };
+    floorImg.src = spaceLayout.floorTextureDataUrl;
+  }
   spaceBgVisible = true;
+  getBgLayer().style.backgroundImage = 'none';
+  renderer.setClearColor(0x1a1410, 1);
 }
 
 function applySpaceTo2D(){
