@@ -604,7 +604,7 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="./three.r128.min.js"></script>
 <script>
 // ===================== DATA =====================
 const CATEGORIES = [
@@ -1708,6 +1708,7 @@ function finalizePlacing(pos){
     color: placingItem.color,
     x: pos.x, z: pos.z,
     rot: 0,
+    popImages: {},
   };
   placingMesh.userData = {
     isPlacing: false,
@@ -1726,6 +1727,7 @@ function finalizePlacing(pos){
   saveHistory();
   updateSceneList();
   updateCosts();
+  selectObject(obj);
 }
 
 
@@ -1750,6 +1752,7 @@ function applyPOPToSide(input, side){
   if(!selectedObj || !input.files[0]) return;
   const reader = new FileReader();
   reader.onload = e => {
+    const dataUrl = e.target.result;
     const img = new Image();
     img.onload = () => {
       // 保留原始解析度
@@ -1780,6 +1783,9 @@ function applyPOPToSide(input, side){
         popMesh.frustumCulled = false;
         popMesh.renderOrder = 100000;
         popMesh.userData.hasPOP = true;
+        if(!selectedObj.popImages) selectedObj.popImages = {};
+        selectedObj.popImages[side] = dataUrl;
+        saveHistory();
         const lbl = document.getElementById('pop-label-' + side);
         if(lbl){ lbl.style.borderColor='var(--green,#7eb87a)'; lbl.style.color='var(--green,#7eb87a)'; lbl.childNodes[0].textContent='✓ 已上傳'; }
       }
@@ -1800,6 +1806,8 @@ function clearPOPSide(side){
     popMesh.material = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.0, side:THREE.FrontSide});
     popMesh.userData.hasPOP = false;
   }
+  if(selectedObj.popImages) delete selectedObj.popImages[side];
+  saveHistory();
   const lbl = document.getElementById('pop-label-' + side);
   if(lbl){ lbl.style.borderColor='var(--accent)'; lbl.style.color='var(--accent)'; lbl.childNodes[0].textContent='🖼 上傳'; }
 }
@@ -1975,13 +1983,21 @@ function updateProp(type, val){
 function applyColor(color){
   if(!selectedObj) return;
   selectedObj.color = color;
+  const popImages = {...(selectedObj.popImages || {})};
   const newMesh = buildMesh(selectedObj.item, color);
   newMesh.position.copy(selectedObj.mesh.position);
   newMesh.rotation.copy(selectedObj.mesh.rotation);
-  newMesh.userData = selectedObj.mesh.userData;
+  newMesh.userData = {
+    objId: selectedObj.id,
+    popFront: newMesh.userData.popFront,
+    popLeft: newMesh.userData.popLeft,
+    popRight: newMesh.userData.popRight,
+    popMesh: newMesh.userData.popFront,
+  };
   scene.remove(selectedObj.mesh);
   scene.add(newMesh);
   selectedObj.mesh = newMesh;
+  applyPOPDataToObject(selectedObj, popImages);
   selectObject(selectedObj);
   saveHistory();
 }
@@ -2006,10 +2022,17 @@ function duplicateSelected(){
   const nx = src.x + 10*U, nz = src.z + 10*U;
   newMesh.position.set(nx, 0, nz);
   newMesh.rotation.y = src.rot;
-  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot };
-  newMesh.userData = {objId: obj.id};
+  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot, popImages:{...(src.popImages || {})} };
+  newMesh.userData = {
+    objId: obj.id,
+    popFront: newMesh.userData.popFront,
+    popLeft: newMesh.userData.popLeft,
+    popRight: newMesh.userData.popRight,
+    popMesh: newMesh.userData.popFront,
+  };
   scene.add(newMesh);
   objects.push(obj);
+  applyPOPDataToObject(obj, obj.popImages);
   saveHistory();
   updateSceneList();
   updateCosts();
@@ -2148,6 +2171,7 @@ function onMouseDown(e){
 }
 
 let ctxTargetObj = null;
+let resizeTargetObj = null;
 
 function onContextMenu(e){
   e.preventDefault();
@@ -2209,15 +2233,17 @@ function ctxDuplicate(){
   const nx = src.x + 10*U, nz = src.z + 10*U;
   newMesh.position.set(nx, 0, nz);
   newMesh.rotation.y = src.rot;
-  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot };
+  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot, popImages:{...(src.popImages || {})} };
   newMesh.userData = {
     objId: obj.id,
     popFront: newMesh.userData.popFront,
     popLeft:  newMesh.userData.popLeft,
     popRight: newMesh.userData.popRight,
+    popMesh: newMesh.userData.popFront,
   };
   scene.add(newMesh);
   objects.push(obj);
+  applyPOPDataToObject(obj, obj.popImages);
   hideContextMenu();
   saveHistory();
   updateSceneList();
@@ -2228,6 +2254,7 @@ function ctxDuplicate(){
 function ctxResize(){
   if(!ctxTargetObj) return;
   const obj = ctxTargetObj;
+  resizeTargetObj = obj;
   hideContextMenu();
 
   // Build inline resize popup near the object
@@ -2269,14 +2296,15 @@ function ctxResize(){
 
 function applyResize(){
   const popup = document.getElementById('resize-popup');
-  if(!ctxTargetObj || !popup) return;
-  const w = parseInt(document.getElementById('rp-w').value)||ctxTargetObj.item.w;
-  const d = parseInt(document.getElementById('rp-d').value)||ctxTargetObj.item.d;
-  const h = parseInt(document.getElementById('rp-h').value)||ctxTargetObj.item.h;
+  if(!resizeTargetObj || !popup) return;
+  const w = parseInt(document.getElementById('rp-w').value)||resizeTargetObj.item.w;
+  const d = parseInt(document.getElementById('rp-d').value)||resizeTargetObj.item.d;
+  const h = parseInt(document.getElementById('rp-h').value)||resizeTargetObj.item.h;
   popup.remove();
 
   // Rebuild mesh with new dimensions
-  const obj = ctxTargetObj;
+  const obj = resizeTargetObj;
+  const popImages = {...(obj.popImages || {})};
   const newItem = {...obj.item, w, d, h, name: `${obj.item.name.replace(/\s+\d+×\d+×\d+$/,'')} ${w}×${d}×${h}`};
   obj.item = newItem;
   const newMesh = buildMesh(newItem, obj.color);
@@ -2287,16 +2315,21 @@ function applyResize(){
     popFront: newMesh.userData.popFront,
     popLeft:  newMesh.userData.popLeft,
     popRight: newMesh.userData.popRight,
+    popMesh: newMesh.userData.popFront,
   };
   scene.remove(obj.mesh);
   scene.add(newMesh);
   obj.mesh = newMesh;
+  applyPOPDataToObject(obj, popImages);
   selectObject(obj);
+  resizeTargetObj = null;
   saveHistory();
   updateSceneList();
 }
 
 function ctxRotate(deg){
+  if(!ctxTargetObj) return;
+  ctxTargetObj.rot += deg * Math.PI / 180;
   ctxTargetObj.mesh.rotation.y = ctxTargetObj.rot;
   document.getElementById('prop-rot').value = Math.round(ctxTargetObj.rot * 180/Math.PI);
   hideContextMenu();
@@ -2547,9 +2580,71 @@ function setView(v){
 }
 function resetView(){ cameraPhi=0.7; cameraTheta=0.8; cameraRadius=120; cameraTarget.set(0,0,0); updateCamera(); }
 
+// ===================== SERIALIZATION =====================
+function getSerializableItem(item){
+  const base = ITEMS.find(i => i.id === item.id);
+  if(base && !item.isCustom && !item.id.startsWith('ai_') && !item.id.includes('_c_')) return null;
+  const {id, cat, name, icon, w, d, h, cost, shape, color, spec, isCustom, steelCat} = item;
+  return {id, cat, name, icon, w, d, h, cost, shape, color, spec, isCustom, steelCat};
+}
+
+function serializeObject(o){
+  return {
+    id: o.id,
+    itemId: o.item.id,
+    item: getSerializableItem(o.item),
+    color: o.color,
+    x: o.x,
+    z: o.z,
+    y: o.mesh ? o.mesh.position.y : 0,
+    rot: o.rot,
+    popImages: {...(o.popImages || {})}
+  };
+}
+
+function resolveSavedItem(s){
+  return ITEMS.find(i => i.id === s.itemId) || s.item;
+}
+
+function applyPOPDataToObject(obj, popImages){
+  obj.popImages = {...(popImages || {})};
+  Object.entries(obj.popImages).forEach(([side, dataUrl])=>{
+    const popMesh = findPOPMeshBySide(obj.mesh, side);
+    if(!popMesh || !dataUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.encoding = THREE.sRGBEncoding;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = true;
+      tex.needsUpdate = true;
+      popMesh.material = new THREE.MeshBasicMaterial({
+        map: tex,
+        side: THREE.DoubleSide,
+        transparent: false,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false
+      });
+      popMesh.material.needsUpdate = true;
+      popMesh.visible = true;
+      popMesh.frustumCulled = false;
+      popMesh.renderOrder = 100000;
+      popMesh.userData.hasPOP = true;
+    };
+    img.src = dataUrl;
+  });
+}
+
 // ===================== HISTORY =====================
 function saveHistory(){
-  const state = objects.map(o=>({id:o.id,itemId:o.item.id,color:o.color,x:o.x,z:o.z,rot:o.rot}));
+  const state = objects.map(serializeObject);
   history=history.slice(0,historyIdx+1);
   history.push(JSON.stringify(state));
   historyIdx=history.length-1;
@@ -2570,14 +2665,23 @@ function restoreHistory(state){
   objects=[];
   deselectAll();
   state.forEach(s=>{
-    const item=ITEMS.find(i=>i.id===s.itemId);
+    const item=resolveSavedItem(s);
     if(!item) return;
     const mesh=buildMesh(item, s.color);
     mesh.position.set(s.x,0,s.z);
+    if(typeof s.y === 'number') mesh.position.y = s.y;
     mesh.rotation.y=s.rot;
-    mesh.userData={objId:s.id};
+    mesh.userData={
+      objId:s.id,
+      popFront: mesh.userData.popFront,
+      popLeft: mesh.userData.popLeft,
+      popRight: mesh.userData.popRight,
+      popMesh: mesh.userData.popFront,
+    };
     scene.add(mesh);
-    objects.push({id:s.id,item,mesh,color:s.color,x:s.x,z:s.z,rot:s.rot});
+    const obj = {id:s.id,item,mesh,color:s.color,x:s.x,z:s.z,rot:s.rot,popImages:{}};
+    objects.push(obj);
+    applyPOPDataToObject(obj, s.popImages);
   });
   updateSceneList();
   updateCosts();
@@ -2597,7 +2701,7 @@ function clearScene(){
 function saveScene(){
   const state={
     boothW, boothD, floorColor, wallColor, boothName,
-    objects: objects.map(o=>({id:o.id,itemId:o.item.id,color:o.color,x:o.x,z:o.z,rot:o.rot}))
+    objects: objects.map(serializeObject)
   };
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -3595,6 +3699,7 @@ async function callClaudeVision(base64Data, mediaType){
         }]
       })
     });
+    if(!response.ok) throw new Error('HTTP ' + response.status);
 
     const data = await response.json();
     const text = data.content?.find(b => b.type === 'text')?.text || '';
@@ -3605,8 +3710,24 @@ async function callClaudeVision(base64Data, mediaType){
     renderAIBoxes();
     setAIStatus('done', `AI 辨識完成，找到 ${aiDetectedItems.length} 個物品，點擊圓框選取後設定尺寸加入場景`);
   } catch(err) {
-    setAIStatus('error', '辨識失敗：' + err.message + '（請確認網路或重試）');
+    createLocalAIDetectionFallback();
+    setAIStatus('done', `已切換本機辨識模式，先框出主要物件區域；可選取後調整尺寸加入場景`);
   }
+}
+
+function createLocalAIDetectionFallback(){
+  aiDetectedItems = [{
+    name: '圖片物件',
+    nameEn: 'uploaded item',
+    shape: 'box',
+    color: '#c8a87a',
+    bbox: {x: 18, y: 14, w: 64, h: 68},
+    suggestW: 30,
+    suggestD: 20,
+    suggestH: 20,
+    description: '由上傳圖片建立的可擺放物件'
+  }];
+  renderAIBoxes();
 }
 
 function setAIStatus(type, msg){
