@@ -172,6 +172,8 @@
   <button class="tb-btn" onclick="showSpaceImport()" style="border-color:#7eb87a;color:#7eb87a;">🏠 匯入空間</button>
   <button class="tb-btn" id="btn-bg-toggle" onclick="toggleSpaceBg()" style="display:none;">👁 隱藏背景</button>
   <button class="tb-btn" id="btn-bg-mode" onclick="toggleBgMode()" style="display:none;">🔄 2D底圖</button>
+  <button class="tb-btn" id="btn-dims" onclick="toggleDimensions()">📏 顯示尺寸</button>
+  <button class="tb-btn active" id="btn-snap-edge" onclick="toggleEdgeSnap()">🧲 自動靠邊</button>
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="exportImage()">📷 截圖</button>
   <button class="tb-btn" onclick="showComposite()">🏙 場景合成</button>
@@ -747,6 +749,10 @@ let isOrbiting = false, isPanning = false;
 let currentCat = 'cake_fridge';
 let labelMesh = null;
 let gridHelper;
+let dimensionsVisible = false;
+let dimensionLabels = [];
+let edgeSnapEnabled = true;
+const EDGE_SNAP_CM = 8;
 
 // Gizmo state
 let gizmoGroup = null;
@@ -814,7 +820,9 @@ function buildBooth(){
   if(wallBack) scene.remove(wallBack);
   if(wallLeft) scene.remove(wallLeft);
   if(wallRight) scene.remove(wallRight);
+  if(labelMesh) scene.remove(labelMesh);
   if(gridHelper) scene.remove(gridHelper);
+  labelMesh = null;
 
   const fw = boothW*U, fd = boothD*U, fh = Math.max(120, roomH || 280)*U;
   const wallT = 2*U;
@@ -845,42 +853,10 @@ function buildBooth(){
   gridHelper.position.y = 0.26*U;
   scene.add(gridHelper);
 
-  const wallMat = new THREE.MeshLambertMaterial({color: new THREE.Color(wallColor)});
-
-  // Back wall
-  const bwGeo = new THREE.BoxGeometry(fw, fh, wallT);
-  wallBack = new THREE.Mesh(bwGeo, wallMat);
-  wallBack.position.set(0, fh/2, -fd/2);
-  wallBack.receiveShadow = true;
-  wallBack.castShadow = true;
-  scene.add(wallBack);
-  if(spaceLayout.wallTextureDataUrl){
-    const wallImg = new Image();
-    wallImg.onload = () => {
-      const tex = new THREE.Texture(wallImg);
-      tex.needsUpdate = true;
-      tex.encoding = THREE.sRGBEncoding;
-      wallBack.material = new THREE.MeshLambertMaterial({map: tex});
-    };
-    wallImg.src = spaceLayout.wallTextureDataUrl;
-  }
-
-  // Left wall
-  const lwGeo = new THREE.BoxGeometry(wallT, fh, fd);
-  wallLeft = new THREE.Mesh(lwGeo, wallMat);
-  wallLeft.position.set(-fw/2, fh/2, 0);
-  wallLeft.receiveShadow = true;
-  wallLeft.visible = spaceLayout.leftWall !== false;
-  scene.add(wallLeft);
-
-  // Right wall
-  wallRight = wallLeft.clone();
-  wallRight.position.set(fw/2, fh/2, 0);
-  wallRight.visible = spaceLayout.rightWall !== false;
-  scene.add(wallRight);
-
-  // Booth sign on back wall
-  updateSignLabel();
+  wallBack = null;
+  wallLeft = null;
+  wallRight = null;
+  updateDimensions();
 }
 
 function updateSignLabel(){
@@ -903,6 +879,183 @@ function updateSignLabel(){
   labelMesh.position.set(0, 35*U, -boothD*U/2 + 0.5*U);
   labelMesh.userData.isSign = true;
   scene.add(labelMesh);
+}
+
+// ===================== DIMENSION OVERLAY =====================
+function makeDimensionLabel(text, accent='#1a1410', bg='rgba(245,232,208,.94)'){
+  const cvs = document.createElement('canvas');
+  cvs.width = 768;
+  cvs.height = 168;
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  ctx.fillStyle = bg;
+  ctx.strokeStyle = '#d4956a';
+  ctx.lineWidth = 6;
+  roundRect(ctx, 18, 24, cvs.width-36, 118, 22);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = accent;
+  ctx.font = 'bold 42px "Noto Sans TC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  fitText(ctx, text, cvs.width-90, 42, 24);
+  ctx.fillText(text, cvs.width/2, 83);
+
+  const tex = new THREE.CanvasTexture(cvs);
+  tex.encoding = THREE.sRGBEncoding;
+  const mat = new THREE.SpriteMaterial({map: tex, transparent:true, depthTest:false, depthWrite:false});
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(30, 6.5, 1);
+  sprite.renderOrder = 10000;
+  sprite.userData.isDimensionLabel = true;
+  return sprite;
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function fitText(ctx, text, maxWidth, startPx, minPx){
+  let size = startPx;
+  while(size > minPx){
+    ctx.font = `bold ${size}px "Noto Sans TC", sans-serif`;
+    if(ctx.measureText(text).width <= maxWidth) break;
+    size -= 2;
+  }
+}
+
+function clearDimensionLabels(){
+  dimensionLabels.forEach(label=>{
+    scene.remove(label);
+    if(label.material?.map) label.material.map.dispose();
+    if(label.material) label.material.dispose();
+  });
+  dimensionLabels = [];
+}
+
+function addDimensionLabel(text, x, y, z, scale=1){
+  const label = makeDimensionLabel(text);
+  label.position.set(x, y, z);
+  label.scale.multiplyScalar(scale);
+  scene.add(label);
+  dimensionLabels.push(label);
+}
+
+function updateDimensions(){
+  clearDimensionLabels();
+  if(!dimensionsVisible || !scene) return;
+
+  const fw = boothW * U;
+  const fd = boothD * U;
+  addDimensionLabel(`整體空間 ${boothW} × ${boothD} cm`, 0, 7*U, fd/2 + 9*U, 1.15);
+  addDimensionLabel(`高度 ${roomH || 280} cm`, -fw/2 + 22*U, 22*U, -fd/2 + 12*U, 0.8);
+
+  objects.forEach(obj=>{
+    const box = new THREE.Box3().setFromObject(obj.mesh);
+    const topY = Math.max(box.max.y + 5*U, 14*U);
+    const text = `${obj.item.name} ${obj.item.w}×${obj.item.d}×${obj.item.h} cm`;
+    addDimensionLabel(text, obj.x, topY, obj.z, 0.82);
+  });
+}
+
+function toggleDimensions(){
+  dimensionsVisible = !dimensionsVisible;
+  const btn = document.getElementById('btn-dims');
+  if(btn){
+    btn.classList.toggle('active', dimensionsVisible);
+    btn.textContent = dimensionsVisible ? '📏 隱藏尺寸' : '📏 顯示尺寸';
+  }
+  updateDimensions();
+}
+
+// ===================== EDGE SNAP =====================
+function getObjectFootprintHalfSize(obj){
+  const w = (obj.item?.w || 10) * U;
+  const d = (obj.item?.d || 10) * U;
+  const rot = obj.rot || obj.mesh?.rotation?.y || 0;
+  const c = Math.abs(Math.cos(rot));
+  const s = Math.abs(Math.sin(rot));
+  return {
+    hx: (w * c + d * s) / 2,
+    hz: (w * s + d * c) / 2
+  };
+}
+
+function snapObjectToEdges(obj, forceClamp=true){
+  if(!obj || !obj.mesh) return false;
+  const {hx, hz} = getObjectFootprintHalfSize(obj);
+  const halfW = boothW * U / 2;
+  const halfD = boothD * U / 2;
+  const snap = EDGE_SNAP_CM * U;
+  let x = obj.x;
+  let z = obj.z;
+  let changed = false;
+
+  const left = -halfW + hx;
+  const right = halfW - hx;
+  const back = -halfD + hz;
+  const front = halfD - hz;
+
+  if(edgeSnapEnabled){
+    if(Math.abs(x - left) <= snap){ x = left; changed = true; }
+    else if(Math.abs(x - right) <= snap){ x = right; changed = true; }
+    if(Math.abs(z - back) <= snap){ z = back; changed = true; }
+    else if(Math.abs(z - front) <= snap){ z = front; changed = true; }
+  }
+
+  if(forceClamp){
+    const clampedX = Math.max(left, Math.min(right, x));
+    const clampedZ = Math.max(back, Math.min(front, z));
+    if(clampedX !== x || clampedZ !== z) changed = true;
+    x = clampedX;
+    z = clampedZ;
+  }
+
+  if(changed){
+    obj.x = x;
+    obj.z = z;
+    obj.mesh.position.x = x;
+    obj.mesh.position.z = z;
+    if(selectedObj === obj){
+      const px = document.getElementById('prop-x');
+      const pz = document.getElementById('prop-z');
+      if(px) px.value = Math.round(obj.x/U);
+      if(pz) pz.value = Math.round(obj.z/U);
+    }
+  }
+  return changed;
+}
+
+function refreshObjectPlacement(obj){
+  snapObjectToEdges(obj, true);
+  if(gizmoGroup && selectedObj === obj){
+    const box = new THREE.Box3().setFromObject(obj.mesh);
+    gizmoGroup.position.set(obj.x, box.max.y + 1*U, obj.z);
+  }
+  updateDimensions();
+}
+
+function toggleEdgeSnap(){
+  edgeSnapEnabled = !edgeSnapEnabled;
+  const btn = document.getElementById('btn-snap-edge');
+  if(btn){
+    btn.classList.toggle('active', edgeSnapEnabled);
+    btn.textContent = edgeSnapEnabled ? '🧲 自動靠邊' : '🧲 靠邊關閉';
+  }
+  if(edgeSnapEnabled){
+    objects.forEach(obj => refreshObjectPlacement(obj));
+    saveHistory();
+  }
 }
 
 function applyBoothInputSize(){
@@ -1762,6 +1915,7 @@ function finalizePlacing(pos){
   };
   placingMesh.position.set(pos.x, 0, pos.z);
   objects.push(obj);
+  refreshObjectPlacement(obj);
   placingMesh = null;
   placingItem = null;
   document.getElementById('placing-indicator').style.display='none';
@@ -2018,6 +2172,7 @@ function updateProp(type, val){
   if(type==='x'){ selectedObj.x = val*U; selectedObj.mesh.position.x=selectedObj.x; }
   if(type==='z'){ selectedObj.z = val*U; selectedObj.mesh.position.z=selectedObj.z; }
   if(type==='rot'){ selectedObj.rot = val*Math.PI/180; selectedObj.mesh.rotation.y=selectedObj.rot; }
+  refreshObjectPlacement(selectedObj);
   saveHistory();
 }
 
@@ -2074,6 +2229,7 @@ function duplicateSelected(){
   scene.add(newMesh);
   objects.push(obj);
   applyPOPDataToObject(obj, obj.popImages);
+  refreshObjectPlacement(obj);
   saveHistory();
   updateSceneList();
   updateCosts();
@@ -2285,6 +2441,7 @@ function ctxDuplicate(){
   scene.add(newMesh);
   objects.push(obj);
   applyPOPDataToObject(obj, obj.popImages);
+  refreshObjectPlacement(obj);
   hideContextMenu();
   saveHistory();
   updateSceneList();
@@ -2362,16 +2519,19 @@ function applyResize(){
   scene.add(newMesh);
   obj.mesh = newMesh;
   applyPOPDataToObject(obj, popImages);
+  refreshObjectPlacement(obj);
   selectObject(obj);
   resizeTargetObj = null;
   saveHistory();
   updateSceneList();
+  updateDimensions();
 }
 
 function ctxRotate(deg){
   if(!ctxTargetObj) return;
   ctxTargetObj.rot += deg * Math.PI / 180;
   ctxTargetObj.mesh.rotation.y = ctxTargetObj.rot;
+  refreshObjectPlacement(ctxTargetObj);
   document.getElementById('prop-rot').value = Math.round(ctxTargetObj.rot * 180/Math.PI);
   hideContextMenu();
   saveHistory();
@@ -2509,6 +2669,7 @@ function onMouseMove(e){
 
 function onMouseUp(e){
   if(isDraggingGizmo){
+    if(selectedObj) refreshObjectPlacement(selectedObj);
     isDraggingGizmo = false;
     gizmoAxis = null;
     document.getElementById('canvas-wrap').style.cursor = '';
@@ -2552,12 +2713,14 @@ function onKeyDown(e){
   if(e.ctrlKey&&e.key==='c') duplicateSelected();
   if(selectedObj){
     const step=5*U;
-    if(e.key==='ArrowLeft'){ selectedObj.x-=step; selectedObj.mesh.position.x=selectedObj.x; document.getElementById('prop-x').value=Math.round(selectedObj.x/U); }
-    if(e.key==='ArrowRight'){ selectedObj.x+=step; selectedObj.mesh.position.x=selectedObj.x; document.getElementById('prop-x').value=Math.round(selectedObj.x/U); }
-    if(e.key==='ArrowUp'){ selectedObj.z-=step; selectedObj.mesh.position.z=selectedObj.z; document.getElementById('prop-z').value=Math.round(selectedObj.z/U); }
-    if(e.key==='ArrowDown'){ selectedObj.z+=step; selectedObj.mesh.position.z=selectedObj.z; document.getElementById('prop-z').value=Math.round(selectedObj.z/U); }
-    if(e.key==='q'){ selectedObj.rot-=Math.PI/12; selectedObj.mesh.rotation.y=selectedObj.rot; document.getElementById('prop-rot').value=Math.round(selectedObj.rot*180/Math.PI); }
-    if(e.key==='e'){ selectedObj.rot+=Math.PI/12; selectedObj.mesh.rotation.y=selectedObj.rot; document.getElementById('prop-rot').value=Math.round(selectedObj.rot*180/Math.PI); }
+    let changed = false;
+    if(e.key==='ArrowLeft'){ selectedObj.x-=step; selectedObj.mesh.position.x=selectedObj.x; document.getElementById('prop-x').value=Math.round(selectedObj.x/U); changed = true; }
+    if(e.key==='ArrowRight'){ selectedObj.x+=step; selectedObj.mesh.position.x=selectedObj.x; document.getElementById('prop-x').value=Math.round(selectedObj.x/U); changed = true; }
+    if(e.key==='ArrowUp'){ selectedObj.z-=step; selectedObj.mesh.position.z=selectedObj.z; document.getElementById('prop-z').value=Math.round(selectedObj.z/U); changed = true; }
+    if(e.key==='ArrowDown'){ selectedObj.z+=step; selectedObj.mesh.position.z=selectedObj.z; document.getElementById('prop-z').value=Math.round(selectedObj.z/U); changed = true; }
+    if(e.key==='q'){ selectedObj.rot-=Math.PI/12; selectedObj.mesh.rotation.y=selectedObj.rot; document.getElementById('prop-rot').value=Math.round(selectedObj.rot*180/Math.PI); changed = true; }
+    if(e.key==='e'){ selectedObj.rot+=Math.PI/12; selectedObj.mesh.rotation.y=selectedObj.rot; document.getElementById('prop-rot').value=Math.round(selectedObj.rot*180/Math.PI); changed = true; }
+    if(changed) refreshObjectPlacement(selectedObj);
   }
 }
 
@@ -2689,6 +2852,7 @@ function saveHistory(){
   history=history.slice(0,historyIdx+1);
   history.push(JSON.stringify(state));
   historyIdx=history.length-1;
+  if(dimensionsVisible) updateDimensions();
 }
 
 function undo(){
@@ -2726,6 +2890,7 @@ function restoreHistory(state){
   });
   updateSceneList();
   updateCosts();
+  updateDimensions();
 }
 
 function clearScene(){
