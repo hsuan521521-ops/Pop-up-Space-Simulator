@@ -264,6 +264,10 @@
             <span class="prop-label">旋轉°</span>
             <input class="prop-val" type="number" id="prop-rot" step="15" onchange="updateProp('rot',this.value)">
           </div>
+          <div class="prop-row">
+            <span class="prop-label">用電量</span>
+            <input class="prop-val" type="text" id="prop-power" placeholder="例：300W / 110V" onchange="updateProp('power',this.value)">
+          </div>
           <div style="margin-bottom:6px;">
             <div class="prop-label" style="width:100%;margin-bottom:4px;">顏色</div>
             <div class="color-row" id="color-swatches"></div>
@@ -749,6 +753,8 @@ let isOrbiting = false, isPanning = false;
 let currentCat = 'cake_fridge';
 let labelMesh = null;
 let gridHelper;
+let spaceFrameGroup = null;
+let currentPageBg = 'white';
 let dimensionsVisible = false;
 let dimensionLabels = [];
 let edgeSnapEnabled = true;
@@ -822,7 +828,9 @@ function buildBooth(){
   if(wallRight) scene.remove(wallRight);
   if(labelMesh) scene.remove(labelMesh);
   if(gridHelper) scene.remove(gridHelper);
+  if(spaceFrameGroup) scene.remove(spaceFrameGroup);
   labelMesh = null;
+  spaceFrameGroup = null;
 
   const fw = boothW*U, fd = boothD*U, fh = Math.max(120, roomH || 280)*U;
   const wallT = 2*U;
@@ -852,6 +860,7 @@ function buildBooth(){
   gridHelper = new THREE.GridHelper(Math.max(fw,fd), Math.max(boothW,boothD)/50, 0x555555, 0x333333);
   gridHelper.position.y = 0.26*U;
   scene.add(gridHelper);
+  buildSpaceFrame(fw, fd);
 
   wallBack = null;
   wallLeft = null;
@@ -881,31 +890,88 @@ function updateSignLabel(){
   scene.add(labelMesh);
 }
 
+function getSpaceFrameColor(){
+  return currentPageBg === 'white' ? 0x4f555c : 0xd4956a;
+}
+
+function buildSpaceFrame(fw, fd){
+  if(spaceFrameGroup) scene.remove(spaceFrameGroup);
+  const color = getSpaceFrameColor();
+  const mat = new THREE.MeshBasicMaterial({color, depthTest:false});
+  const y = 0.9 * U;
+  const thick = Math.max(2.4 * U, Math.min(fw, fd) * 0.012);
+  const g = new THREE.Group();
+  g.userData.isSpaceFrame = true;
+
+  const front = new THREE.Mesh(new THREE.BoxGeometry(fw + thick, thick, thick), mat);
+  front.position.set(0, y, fd/2);
+  const back = front.clone();
+  back.position.set(0, y, -fd/2);
+
+  const left = new THREE.Mesh(new THREE.BoxGeometry(thick, thick, fd + thick), mat);
+  left.position.set(-fw/2, y, 0);
+  const right = left.clone();
+  right.position.set(fw/2, y, 0);
+
+  [front, back, left, right].forEach(m=>{
+    m.renderOrder = 5000;
+    m.userData.isSpaceFrame = true;
+    g.add(m);
+  });
+
+  const cornerGeo = new THREE.BoxGeometry(thick * 2.4, thick * 1.15, thick * 2.4);
+  [[-fw/2,-fd/2],[fw/2,-fd/2],[-fw/2,fd/2],[fw/2,fd/2]].forEach(([x,z])=>{
+    const c = new THREE.Mesh(cornerGeo, mat);
+    c.position.set(x, y + 0.05*U, z);
+    c.renderOrder = 5001;
+    c.userData.isSpaceFrame = true;
+    g.add(c);
+  });
+
+  scene.add(g);
+  spaceFrameGroup = g;
+}
+
+function updateSpaceFrameStyle(){
+  if(!spaceFrameGroup) return;
+  const color = getSpaceFrameColor();
+  spaceFrameGroup.traverse(c=>{
+    if(c.isMesh && c.material && c.userData.isSpaceFrame){
+      c.material.color.setHex(color);
+      c.material.needsUpdate = true;
+    }
+  });
+}
+
 // ===================== DIMENSION OVERLAY =====================
-function makeDimensionLabel(text, accent='#1a1410', bg='rgba(245,232,208,.94)'){
+function makeDimensionLabel(text, accent='#2f3438', bg='rgba(255,255,255,.82)'){
   const cvs = document.createElement('canvas');
   cvs.width = 768;
-  cvs.height = 168;
+  cvs.height = 128;
   const ctx = cvs.getContext('2d');
   ctx.clearRect(0,0,cvs.width,cvs.height);
+  ctx.shadowColor = 'rgba(0,0,0,.14)';
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetY = 5;
   ctx.fillStyle = bg;
-  ctx.strokeStyle = '#d4956a';
-  ctx.lineWidth = 6;
-  roundRect(ctx, 18, 24, cvs.width-36, 118, 22);
+  ctx.strokeStyle = 'rgba(79,85,92,.46)';
+  ctx.lineWidth = 3;
+  roundRect(ctx, 24, 24, cvs.width-48, 76, 18);
   ctx.fill();
   ctx.stroke();
+  ctx.shadowColor = 'transparent';
   ctx.fillStyle = accent;
-  ctx.font = 'bold 42px "Noto Sans TC", sans-serif';
+  ctx.font = '600 34px "Noto Sans TC", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  fitText(ctx, text, cvs.width-90, 42, 24);
-  ctx.fillText(text, cvs.width/2, 83);
+  fitText(ctx, text, cvs.width-100, 34, 22);
+  ctx.fillText(text, cvs.width/2, 63);
 
   const tex = new THREE.CanvasTexture(cvs);
   tex.encoding = THREE.sRGBEncoding;
   const mat = new THREE.SpriteMaterial({map: tex, transparent:true, depthTest:false, depthWrite:false});
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(30, 6.5, 1);
+  sprite.scale.set(25, 4.2, 1);
   sprite.renderOrder = 10000;
   sprite.userData.isDimensionLabel = true;
   return sprite;
@@ -951,20 +1017,31 @@ function addDimensionLabel(text, x, y, z, scale=1){
   dimensionLabels.push(label);
 }
 
+function getDefaultPower(item){
+  const watt = item?.spec?.watt;
+  if(watt && watt !== '—') return watt;
+  return '';
+}
+
+function formatPowerLabel(power){
+  const p = String(power || '').trim();
+  if(!p) return '';
+  return p;
+}
+
 function updateDimensions(){
   clearDimensionLabels();
   if(!dimensionsVisible || !scene) return;
 
-  const fw = boothW * U;
   const fd = boothD * U;
-  addDimensionLabel(`整體空間 ${boothW} × ${boothD} cm`, 0, 7*U, fd/2 + 9*U, 1.15);
-  addDimensionLabel(`高度 ${roomH || 280} cm`, -fw/2 + 22*U, 22*U, -fd/2 + 12*U, 0.8);
+  addDimensionLabel(`空間｜${boothW} × ${boothD} cm`, 0, 7*U, fd/2 + 8*U, 1.0);
 
   objects.forEach(obj=>{
     const box = new THREE.Box3().setFromObject(obj.mesh);
     const topY = Math.max(box.max.y + 5*U, 14*U);
-    const text = `${obj.item.name} ${obj.item.w}×${obj.item.d}×${obj.item.h} cm`;
-    addDimensionLabel(text, obj.x, topY, obj.z, 0.82);
+    const power = formatPowerLabel(obj.power);
+    const text = `${obj.item.name}｜${obj.item.w}×${obj.item.d}×${obj.item.h} cm${power ? `｜${power}` : ''}`;
+    addDimensionLabel(text, obj.x, topY, obj.z, 0.72);
   });
 }
 
@@ -1902,6 +1979,7 @@ function finalizePlacing(pos){
     color: placingItem.color,
     x: pos.x, z: pos.z,
     rot: 0,
+    power: getDefaultPower(placingItem),
     popImages: {},
   };
   placingMesh.userData = {
@@ -2130,6 +2208,7 @@ function selectObject(obj){
   document.getElementById('prop-x').value = Math.round(obj.x/U);
   document.getElementById('prop-z').value = Math.round(obj.z/U);
   document.getElementById('prop-rot').value = Math.round(obj.rot*180/Math.PI);
+  document.getElementById('prop-power').value = obj.power || '';
   // show POP panel — fridge=single face, table=three faces
   const isMultiPOP = ['cake_square','cake_jewel','cake_desktop','steel_table','chest'].includes(obj.item.shape);
   const isSinglePOP = obj.item.shape === 'cylinder';
@@ -2167,6 +2246,12 @@ function deselectAll(){
 
 function updateProp(type, val){
   if(!selectedObj) return;
+  if(type==='power'){
+    selectedObj.power = String(val || '').trim();
+    updateDimensions();
+    saveHistory();
+    return;
+  }
   val = parseFloat(val);
   if(isNaN(val)) return;
   if(type==='x'){ selectedObj.x = val*U; selectedObj.mesh.position.x=selectedObj.x; }
@@ -2218,7 +2303,7 @@ function duplicateSelected(){
   const nx = src.x + 10*U, nz = src.z + 10*U;
   newMesh.position.set(nx, 0, nz);
   newMesh.rotation.y = src.rot;
-  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot, popImages:{...(src.popImages || {})} };
+  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot, power:src.power || getDefaultPower(src.item), popImages:{...(src.popImages || {})} };
   newMesh.userData = {
     objId: obj.id,
     popFront: newMesh.userData.popFront,
@@ -2430,7 +2515,7 @@ function ctxDuplicate(){
   const nx = src.x + 10*U, nz = src.z + 10*U;
   newMesh.position.set(nx, 0, nz);
   newMesh.rotation.y = src.rot;
-  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot, popImages:{...(src.popImages || {})} };
+  const obj = { id:Date.now()+'_dup', item:src.item, mesh:newMesh, color:src.color, x:nx, z:nz, rot:src.rot, power:src.power || getDefaultPower(src.item), popImages:{...(src.popImages || {})} };
   newMesh.userData = {
     objId: obj.id,
     popFront: newMesh.userData.popFront,
@@ -2802,6 +2887,7 @@ function serializeObject(o){
     z: o.z,
     y: o.mesh ? o.mesh.position.y : 0,
     rot: o.rot,
+    power: o.power || '',
     popImages: {...(o.popImages || {})}
   };
 }
@@ -2884,7 +2970,7 @@ function restoreHistory(state){
       popMesh: mesh.userData.popFront,
     };
     scene.add(mesh);
-    const obj = {id:s.id,item,mesh,color:s.color,x:s.x,z:s.z,rot:s.rot,popImages:{}};
+    const obj = {id:s.id,item,mesh,color:s.color,x:s.x,z:s.z,rot:s.rot,power:s.power || getDefaultPower(item),popImages:{}};
     objects.push(obj);
     applyPOPDataToObject(obj, s.popImages);
   });
@@ -3006,7 +3092,7 @@ function repair3DBrowseVisibility(){
     if(isIntentionallyHiddenMeshFor3D(c)) return;
 
     // 場景設備與已上傳圖片都必須在 3D 瀏覽時持續顯示。
-    if(c !== floorMesh && c !== wallBack && c !== wallLeft && c !== wallRight && c !== gridHelper){
+    if(c !== floorMesh && c !== wallBack && c !== wallLeft && c !== wallRight && c !== gridHelper && !(c.userData && c.userData.isSpaceFrame)){
       c.visible = true;
     }
 
@@ -3783,6 +3869,7 @@ function updateBgModeBtn(){
 }
 
 function setPageBg(color){
+  currentPageBg = color;
   const bg = color === 'white' ? '#ffffff' : '#000000';
   document.body.style.background = bg;
   document.getElementById('main').style.background = bg;
@@ -3807,11 +3894,12 @@ function setPageBg(color){
     scene.remove(gridHelper);
     const fw=boothW*U, fd=boothD*U;
     gridHelper=new THREE.GridHelper(Math.max(fw,fd),Math.max(boothW,boothD)/50,
-      new THREE.Color(color==='white'?'#bbbbbb':'#444444'),
-      new THREE.Color(color==='white'?'#cccccc':'#333333'));
+      new THREE.Color(color==='white'?'#5f6368':'#444444'),
+      new THREE.Color(color==='white'?'#9aa0a6':'#333333'));
     gridHelper.position.y=0.26*U;
     scene.add(gridHelper);
   }
+  updateSpaceFrameStyle();
 }
 
 // ===================== CUSTOM STEEL TABLE =====================
